@@ -11,10 +11,10 @@
 !outputs/
 
 # Ignore all files within boltz_inputs and outputs
-boltz_inputs/**
-outputs/**
+
 
 # Ignore all .log files
 *.log
 *.json
 *.csv
+*.yaml
