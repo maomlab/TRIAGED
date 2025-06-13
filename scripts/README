@@ -102,7 +102,10 @@ python analyize_boltz_predictions.py -i /path/to/input_directory -o /path/to/out
 2. **Computed Metrics**:  
    - File: `computed_metrics.json`  
    - Description: Contains computed metrics and bootstrap metrics (if enabled) for each score column.
-
+3. **Histograms**:
+   - File: `{metric}_bootstrap_histogram_{score}.png`  
+   - Description: script will automatically generate bootstraped histograms for each score column,. 
+   
 ### Input Data Requirements
 
 #### Boltz Predictions
