@@ -9,7 +9,8 @@
 # Allow boltz_inputs and outputs directories (but not their contents)
 !boltz_inputs/
 !outputs/
-
+!outputs/cb1r/bolts_tldr_cb1r
+!outputs/cb1r/bolts_tldr_cb1r/** 
 # Ignore all files within boltz_inputs and outputs
 
 
