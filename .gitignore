@@ -1,0 +1,20 @@
+
+
+# Allow scripts and input_files directories and their contents
+!scripts/
+!input_files/
+!scripts/**
+!input_files/**
+
+# Allow boltz_inputs and outputs directories (but not their contents)
+!boltz_inputs/
+!outputs/
+
+# Ignore all files within boltz_inputs and outputs
+boltz_inputs/**
+outputs/**
+
+# Ignore all .log files
+*.log
+*.json
+*.csv
