@@ -18,3 +18,11 @@
 *.json
 *.csv
 *.yaml
+*pyc
+*a3m
+*tar.gz
+*pkl
+*m8
+*msa.sh
+*npz
+*cif
