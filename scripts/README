@@ -1,0 +1,71 @@
+# Analyze Boltz Predictions
+
+This script processes Boltz predictions, computes metrics, and optionally performs bootstrapping for further analysis. The results are saved as CSV and JSON files for easy access.
+
+## Requirements
+
+- Python 3.x
+- Required Python libraries:
+  - `pandas`
+  - `argparse`
+  - `json`
+  - `scoring_utils` (custom module)
+  - Other dependencies listed in `scoring_utils.py`
+
+## Usage
+
+### Command-Line Arguments
+
+| Argument               | Type    | Required | Default | Description                                                                 |
+|------------------------|---------|----------|---------|-----------------------------------------------------------------------------|
+| `-i`, `--input_directory` | `str`   | Yes      | None    | Directory containing Boltz predictions.                                    |
+| `-o`, `--output_directory` | `str`   | Yes      | None    | Directory to save the processed output files.                              |
+| `-m`, `--compute_metrics`  | `bool`  | No       | `False` | Whether to compute metrics or not.                                         |
+| `-b`, `--bootstrap`        | `bool`  | No       | `False` | Whether to compute bootstrap metrics or not.                               |
+| `-v`, `--in-vitro-data`    | `str`   | No       | `None`  | Path to the in vitro data file, requires a column named `is_binder`.       |
+
+### Example Usage
+
+#### Basic Processing
+```bash
+python analyize_boltz_predictions.py -i /path/to/input_directory -o /path/to/output_directory
+```
+
+#### Compute Metrics
+```bash
+python analyize_boltz_predictions.py -i /path/to/input_directory -o /path/to/output_directory -m True -v /path/to/in_vitro_data.csv
+```
+
+#### Compute Metrics with Bootstrapping
+```bash
+python analyize_boltz_predictions.py -i /path/to/input_directory -o /path/to/output_directory -m True -b True -v /path/to/in_vitro_data.csv
+```
+
+### Output Files
+
+1. **Processed Data**:  
+   - File: `processed_boltz_data_full.csv`  
+   - Description: Contains the processed Boltz predictions.
+
+2. **Computed Metrics**:  
+   - File: `computed_metrics.json`  
+   - Description: Contains computed metrics and bootstrap metrics (if enabled) for each score column.
+
+### Input Data Requirements
+
+#### Boltz Predictions
+The input directory should contain subdirectories with JSON files for each compound. Each subdirectory must include:
+- `affinity_<compound_name>.json`
+- `confidence_<compound_name>_model_0.json`
+
+#### In Vitro Data
+The in vitro data file must be a CSV with a column named `is_binder` indicating whether a compound is a binder (`True`) or not (`False`).
+
+### Notes
+
+- Ensure the input directory and in vitro data file are correctly formatted.
+- Bootstrapping may take longer depending on the dataset size and number of iterations.
+
+### Contact
+
+For issues or questions, please contact limcaoco@umich.edu
