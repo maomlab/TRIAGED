@@ -4,15 +4,13 @@ import argparse
 import json
 from analysis_utils import read_boltz_predictions, compute_vscreen_metrics
 
-def format_for_tldr(input_dataframe,output_directory):
-    pass
 
 def main():
     parser = argparse.ArgumentParser(description="Process and format TLDR data.")
     parser.add_argument("-i","--input_directory", type=str, required=True, help="Directory containing boltz predictions")
     parser.add_argument("-o","--output_directory", type=str, required=True, help="Directory to save the processed output files.")    
-    parser.add_argument("-m","--compute_metrics", type=bool, default=False, help="Whether to compute metrics or not. Default is False.")
-    parser.add_argument("-b","--bootstrap", type=bool, default=False, help="Whether to compute bootstrap metrics or not. Default is False.")
+    parser.add_argument("-m", "--compute_metrics", action="store_true", help="Flag to compute metrics.")
+    parser.add_argument("-b", "--bootstrap", action="store_true", help="Flag to compute bootstrap metrics.")
     parser.add_argument("-v","--in-vitro-data", type=str, required=False, default=None, help="Path to the in vitro data file, requires a column stating if compound is a binder or not. Default is None.")
     args = parser.parse_args()
 
@@ -49,12 +47,12 @@ def main():
                                  "Complex iPLDDT",
                                  "Complex PDE",
                                  "Complex iPDE"]:
-                        metrics = compute_vscreen_metrics(positive_df, negative_df, df, col)
+                        metrics = compute_vscreen_metrics(positive_df, negative_df, df, col, args.output_directory)
                         print(f"Metrics for {col}: {metrics}")
                         metrics_output[col] = {"Metrics": metrics}  # Include metrics in the JSON structure
                         if args.bootstrap:
                             print("Computing bootstrap metrics...")
-                            bootstrap_metrics = compute_vscreen_metrics(positive_df, negative_df, df, col, args.output_directory,bootstrap=True)
+                            bootstrap_metrics = compute_vscreen_metrics(positive_df, negative_df, df, col, args.output_directory, bootstrap=True)
                             print(f"Bootstrap metrics for {col}: {bootstrap_metrics}")
                             metrics_output[col]["Bootstrap_Metrics"] = bootstrap_metrics  # Add bootstrap metrics to JSON structure
                 

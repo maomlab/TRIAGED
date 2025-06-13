@@ -7,7 +7,7 @@ import matplotlib  # must import first
 import matplotlib.pyplot as plt
 matplotlib.use('Agg')
 import seaborn as sns # Making graphs 
-from plotnine import ggplot, aes, geom_histogram, geom_vline, annotate, theme_minimal
+from plotnine import ggplot, aes, geom_histogram, geom_vline, annotate, theme_minimal, ggtitle
 
 import numpy   as np
 from scipy import stats
@@ -58,7 +58,7 @@ def read_boltz_predictions(predictions_dir):
             energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
 
             data.append({
-                "Compound Name": compound_name,
+                "compound_id": compound_name,
                 "Affinity Pred Value": affinity_pred_value,
                 "Confidence Score": confidence_score,
                 "kcal/mol": energy_value,
@@ -164,7 +164,10 @@ def logAUC_from_dataframe(df, score_col, label_col):
     # Return adjusted log AUC
     return area / np.log10(LOGAUC_MAX / LOGAUC_MIN) - RANDOM_LOGAUC
 
-def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col='score', compound_col='compound_id', return_curves=False, bootstrap=False):
+def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col, output_dir, compound_col='compound_id', return_curves=False, bootstrap=False):
+    # Replace '/' in score_col with 'kcal' for output file names
+    sanitized_score_col = score_col.replace('/', 'kcal') if score_col == 'kcal/mol' else score_col
+
     df_pos = df_pos.copy()
     df_neg = df_neg.copy()
     df_pos['label'] = 1
@@ -257,7 +260,8 @@ def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col='score', compound
         bootstrap_stds = bootstrap_df.std().to_dict()
 
         # Export bootstrap results to CSV
-        bootstrap_df.to_csv(f'bootstrap_results_{score_col}.csv', index=False)
+        bootstrap_csv_path = os.path.join(output_dir, f'bootstrap_results_{sanitized_score_col}.csv')
+        bootstrap_df.to_csv(bootstrap_csv_path, index=False)
 
         # Generate histograms for each metric
         for metric in bootstrap_df.columns:
@@ -271,9 +275,10 @@ def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col='score', compound
                 geom_vline(xintercept=mean_val + std_val, color="black", linetype="dashed") +
                 annotate("text", x=mean_val, y=0, label=f"Mean: {mean_val:.2f}", color="red", ha="center") +
                 theme_minimal() +
-                ggplot.title(f"Bootstrap Histogram for {metric} using {score_col}")
+                ggtitle(f"Bootstrap Histogram for {metric} using {sanitized_score_col}")
             )
-            plot.save(f"{metric}_bootstrap_histogram_{score_col}.png")
+            plot_path = os.path.join(output_dir, f"{metric}_bootstrap_histogram_{sanitized_score_col}.png")
+            plot.save(plot_path)
 
         metrics['Bootstrap_Means'] = bootstrap_means
         metrics['Bootstrap_Stds'] = bootstrap_stds

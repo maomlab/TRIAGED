@@ -1,4 +1,4 @@
-Catalog ID,"% 1H-CP-55,940 displacement (mean) from single point screen","% 1H-CP-55,940 displacement (SEM) from single point screen",rCB1 pKi,SMILES,DOCK score,is_binder
+compound_id,"% 1H-CP-55,940 displacement (mean) from single point screen","% 1H-CP-55,940 displacement (SEM) from single point screen",rCB1 pKi,SMILES,DOCK score,is_binder
 ZINC000537551486,90.6,0.0,6.14,COC(=O)[C@@H](NC(=O)c1cc(C)n(-c2cccc(F)c2)n1)c1cccs1,-39.13,TRUE
 ZINC000749087800,80.92,0.63,6.0,Cc1c(C(=O)OC[C@H]2CSc3ccccc3O2)cnn1Cc1ccccc1,-43.22,TRUE
 ZINC001341460450,80.28,0.66,6.16,Cn1nc(-c2nnc(C(C)(C)Oc3ccc(Cl)cc3)o2)c2ccccc2c1=O,-44.24,TRUE

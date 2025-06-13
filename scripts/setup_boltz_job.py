@@ -34,7 +34,7 @@ def create_boltz_job(csv_file, pdb_file, output_dir):
     with open(csv_file, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
-            catalog_id = row["Catalog ID"]
+            catalog_id = row["compound_id"]
             smiles = row["SMILES"]
 
             # Create .yaml file in the output directory
