@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import argparse
 import json
-from scoring_utils import read_boltz_predictions, compute_vscreen_metrics, bootstrap_single_keep_ratio
+from analysis_utils import read_boltz_predictions, compute_vscreen_metrics
 
 def format_for_tldr(input_dataframe,output_directory):
     pass
