@@ -1,4 +1,4 @@
-Catalog ID,% displacement of 3HPGE2 at 10 µM,PRESTO-Tango -logIC50,PRESTO-Tango IC50 (nM),PRESTO-Tango Ki (nM),Arrestin-BRET -logIC50,Arrestin-BRET IC50 (nM),Arrestin-BRET  Ki (nM),SMILES,DOCK score
+compound_ID,% displacement of 3HPGE2 at 10 µM,PRESTO-Tango -logIC50,PRESTO-Tango IC50 (nM),PRESTO-Tango Ki (nM),Arrestin-BRET -logIC50,Arrestin-BRET IC50 (nM),Arrestin-BRET  Ki (nM),SMILES,DOCK score
 ZINC000080510038,-5.8,,,,,,,CN(C(=O)CSc1nnc(S)s1)c1ccc2ccccc2c1,-66.99
 ZINC000169615872,-4.9,,,,,,,O=C(O)CSc1nc2cc(Cl)ccc2n1Cc1ccccc1,-64.43
 ZINC000176126532,-5.2,,,,,,,Cc1ccc(CN(Cc2ccco2)C(=O)CSc2n[nH]c(=S)s2)s1,-65.46

@@ -1,4 +1,4 @@
-ZINC ID,Catalog ID,DOCK score,Global rank,Tc to knowns,Ki (uM),SMILES,Picking method
+ZINC ID,compound_ID,DOCK score,Global rank,Tc to knowns,Ki (uM),SMILES,Picking method
 ZINCpA000006Dcn3,Z4589964339,-100.58,36,0.27027,NH,CC=1C=CC(OCCCC(=O)N2CCC(CC2)(C#N)C(=O)O)=C(Cl)C1,auto
 ZINCo9000000v2k6,Z6615022323,-97.58,44,0.25,NH,CC=1OC=NC1C(=O)NNS(=O)(=O)C=2C=CC(C#N)=C(C2)[N+](=O)[O-],auto
 ZINCpg00000gQML0,Z6615022338,-97.26,46,0.177215,HB,CC=1C=CC=2CCN(CC2C1Br)C(=O)CN3C=C(C#N)C(=O)NC3=O,auto

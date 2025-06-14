@@ -1,4 +1,4 @@
-Catalog ID,FACTS Prediction,DOCK score,FEP kcal/mol,MM/GBSA kcal/mol,SMILES,Experimental Ki uM 3 points,Experimental Ki uM Full CRC,Short Code
+compound_ID,FACTS Prediction,DOCK score,FEP kcal/mol,MM/GBSA kcal/mol,SMILES,Experimental Ki uM 3 points,Experimental Ki uM Full CRC,Short Code
 ZINCgq000000dsln,Likely artifacts,-150.888596,-2.75,-59.35,CC#CCCN1C=C(I)C(C)=C(C#N)C1=O,NA,,dsln
 ZINCoD000000Z8ck,Likely artifacts,-144.301834,-1.58,-115.77,CCC(CSC)NC(=O)N1CCCC1CN2C=NC=3C=CC=CC23,NA,,Z8ck
 ZINCpv000000awZV,Likely artifacts,-134.684921,-1.24,-58.58,CN1C=C(Br)C(=CC1=O)C(=O)N(CC=2C=CC=CC2)C(CO)C3CC3,NA,,awZV

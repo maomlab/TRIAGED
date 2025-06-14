@@ -1,4 +1,4 @@
-Catalog ID,Binder,D4 Ki(nM),D2 Ki(nM),D3 Ki(nM),cAMP EC50(nM),Inhibition (%) at 10uM,Notes,SMILES,DOCK score,hac
+compound_ID,Binder,D4 Ki(nM),D2 Ki(nM),D3 Ki(nM),cAMP EC50(nM),Inhibition (%) at 10uM,Notes,SMILES,DOCK score,hac
 ZINC000191583186,1,1390,3860,1730,NT,82.48,,Cc1ccc(C[C@@H](CO)N[C@@H](C)CCc2ccccc2[N+](=O)[O-])cc1,-75.5,25.0
 ZINC000159533726,0,,,,NT,2.68,,C[C@H](C(=O)Nc1cc([N+](=O)[O-])ccc1Cl)N(C)C[C@@H]1CCC[C@@H]1O,-73.67,24.0
 ZINC000151228439,0,,,,NT,17.50,,C[C@@H](NC[C@](C)(O)c1ccccc1)c1cn(-c2ccccc2)nn1,-73.47,24.0

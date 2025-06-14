@@ -1,4 +1,4 @@
-zincid,ID,Catalog ID,SMILES,%Inhibition at 100µM,IC50 (DMSO) [µM],IC50 (ACN) [µM],IC50 (EtOH) [µM],Conc. for aggregation test [µM],smiles,tranche,DOCK score
+zincid,ID,compound_ID,SMILES,%Inhibition at 100µM,IC50 (DMSO) [µM],IC50 (ACN) [µM],IC50 (EtOH) [µM],Conc. for aggregation test [µM],smiles,tranche,DOCK score
 ZINCoD0000017Vxn,Z1037975544,Z1037975544,CC1=CC(C(=O)NC=2C=CC=C(CN3C=CC=CC3=O)C2)=C(C)O1,,>200,,,200,Cc1cc(C(=O)Nc2cccc(Cn3ccccc3=O)c2)c(C)o1,H24P330,-46.97
 ZINCkm000005LW7N,Z1082778674,Z1082778674,O=C(CN1C=2CCCCC2SC1=O)NCC3=CC=CO3,,>200,,,100,O=C(Cn1c2c(sc1=O)CCCC2)NCc1ccco1,H20P160,-44.58
 ZINClJ000003UHPl,Z1124054174,Z1124054174,CC=1C=CC(=O)N(CC(=O)N2CC(C)(C)C2C=3C=CC=CC3)N1,,>200,,,100,O=C1O[C@@H](C(=O)Nc2cc(Cl)cc(Br)c2)c2ccccc21,H21P390,-45.43

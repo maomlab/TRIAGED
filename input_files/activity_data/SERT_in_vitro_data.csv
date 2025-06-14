@@ -1,4 +1,4 @@
-Catalog ID,%Inhibition [3H]5-HT transport by SERT,SMILES,DOCK score
+compound_ID,%Inhibition [3H]5-HT transport by SERT,SMILES,DOCK score
 ZINC000623997601,63,Brc1ccc(-c2ccnc(N3CC[C@@H](N4CC=CC4)C3)n2)cc1,-49.99
 ZINC000305339642,94,Cc1ccc(C#N)cc1OC[C@H](O)CN(C)Cc1ccccc1,-54.44
 ZINC000853098204,50,O[C@@H](CN[C@@H]1CCCN(Cc2ccc(F)cc2Cl)C1)c1ccccn1,-52.45

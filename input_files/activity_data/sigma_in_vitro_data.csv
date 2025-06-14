@@ -1,4 +1,4 @@
-Catalog ID,% sigma2 binding at 1 uM,% sigma1 binding at 1 uM,sigma2 pKi,sigma1 pKi,SMILES,DOCK score
+compound_ID,% sigma2 binding at 1 uM,% sigma1 binding at 1 uM,sigma2 pKi,sigma1 pKi,SMILES,DOCK score
 ZINC000450573233,3.57,33.63,8.37,6.89,C[C@@H](c1ccccc1)[C@@H](O)CN1CCC(c2c[nH]c3ncccc23)CC1,-57.25
 ZINC000895657866,2.97,73.04,7.67,6.0,CC(C)(NCc1ccc2c(c1)OCCO2)[C@H](O)c1ccccc1,-55.35
 ZINC001170548029,8.4,78.46,7.65,6.14,Fc1ccccc1[C@H]1CCN(CC#Cc2cccc(Cl)c2)C1,-57.11
