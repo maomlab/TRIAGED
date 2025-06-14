@@ -23,7 +23,7 @@ The input CSV file must contain the following columns:
 - `SMILES`: SMILES string representing the compound structure.
 
 #### Output
-
+- `.a3m` MSA files are pregenerated using the mmseqs2 server, you do not need to have --use-msa-server flag in boltz
 - `.yaml` files are created in the specified output directory, one for each compound in the CSV file.
 - The protein sequence is extracted from the PDB file and included in the `.yaml` files.
 
