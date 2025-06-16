@@ -6,7 +6,43 @@ from pdb_to_fasta import pdb_to_fasta
 from mmseqs2 import run_mmseqs2
 import argparse
 
+from rdkit import Chem
+from rdkit.Chem import AllChem
 
+def check_smiles(smiles: str, verbose: bool = False):
+    """
+    Attempts to load and sanitize a SMILES string using RDKit.
+    Returns a canonicalized SMILES string if successful, otherwise None.
+    
+    Parameters:
+    - smiles (str): The input SMILES string.
+    - verbose (bool): If True, print debug messages on failure.
+
+    Returns:
+    - str or None: A valid, canonical SMILES or None if the molecule is invalid.
+    """
+    try:
+        # Attempt to parse without sanitizing
+        mol = Chem.MolFromSmiles(smiles, sanitize=False)
+        if mol is None:
+            if verbose:
+                print(f"[ERROR] MolFromSmiles failed for: {smiles}")
+            return None
+        
+        # Attempt sanitization (includes valence check, aromaticity, Hs)
+        Chem.SanitizeMol(mol)
+
+        # Optionally do other cleanups (like kekulization or 2D coordinates)
+        # AllChem.Compute2DCoords(mol)
+
+        # Return the canonical SMILES
+        return Chem.MolToSmiles(mol, canonical=True)
+
+    except Exception as e:
+        if verbose:
+            print(f"[ERROR] Sanitization failed for SMILES: {smiles}\n{e}")
+        return None
+    
 def ensure_environment_variables():
     """
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
@@ -72,7 +108,10 @@ def create_boltz_job(csv_file, pdb_file, output_dir):
         for row in reader:
             catalog_id = row["compound_ID"]
             smiles = row["SMILES"]
-
+            smiles = check_smiles(smiles, verbose=True)
+            if smiles is None:
+                print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}")
+                continue
             # Create .yaml file in the output directory
             yaml_file = os.path.join(output_dir, f"{catalog_id}.yaml")
             with open(yaml_file, 'w') as yaml:
@@ -90,7 +129,8 @@ def create_boltz_job(csv_file, pdb_file, output_dir):
                 yaml.write("  - affinity:\n")
                 yaml.write("      binder: B\n")
     print(f"YAML files created successfully in {output_dir}.")
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files.")
     parser.add_argument("-i","--input_csv_file", type=str, required=True,help="Path to the input CSV file.")
     parser.add_argument("-p","--input_pdb_file", type=str, required=True,help="Path to the input PDB file.")
@@ -99,3 +139,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory)
+
+if __name__ == "__main__":
+    main()
+    

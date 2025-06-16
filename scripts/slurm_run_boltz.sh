@@ -3,11 +3,11 @@
 #SBATCH --mail-type=FAIL,END
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=24:00:00
+#SBATCH --time=12:00:00
 #SBATCH --account=maom99
 #SBATCH --partition=spgpu
 #SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=8
 #SBATCH --mem-per-gpu=40000m
 #SBATCH --mail-user=limcaoco@umich.edu
 #SBATCH --output=sigma_boltz_slurm.log
@@ -19,4 +19,4 @@ BOLTZ_PATH=/home/limcaoco/opt/boltz
 mkdir -p ../outputs/${RECEPTOR}
 #conda activate boltz_env 
 module load cuda cudnn
-boltz predict ${WORK_DIR} --use_msa_server --out_dir ../outputs/${RECEPTOR}
+boltz predict ${WORK_DIR} --out_dir ../outputs/${RECEPTOR} --num_workers 8
