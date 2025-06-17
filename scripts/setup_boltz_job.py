@@ -50,34 +50,37 @@ def ensure_environment_variables():
     if not os.getenv("PROJECT_DIR"):
         print("Environment variable PROJECT_DIR is not set. Running setup_enviorment.sh...")
         setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
-        subprocess.run(["source", setup_script], check=True)
+        subprocess.run(f"source {setup_script}", shell=True, executable="/bin/bash", check=True)
         print("Environment variables set successfully.")
 
 
-def create_boltz_job(csv_file, pdb_file, output_dir):
+def create_boltz_job(csv_file, pdb_file, output_dir, covalent_docking=False):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
     :param csv_file: Path to the input CSV file.
     :param pdb_file: Path to the input PDB file.
     :param output_dir: Path to the output directory.
+    :param covalent_docking: Whether to write yaml for covalent docking. 
     """
     # Ensure environment variables are set
     ensure_environment_variables()
 
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
+
     # Check if the PDB file exists
     if not os.path.isfile(pdb_file):
         print(f"Error: PDB file '{pdb_file}' does not exist.")
         sys.exit(1)
-    # Check if the CSV file exists
-    if not os.path.isfile(csv_file):
-        print(f"Error: CSV file '{csv_file}' does not exist.")
-        sys.exit(1)
+    # Check if the CSV file exists only for non-covalent docking 
+    if not covalent_docking:
+        if not os.path.isfile(csv_file):
+            print(f"Error: CSV file '{csv_file}' does not exist.")
+            sys.exit(1)
     
     # Convert PDB to FASTA
-    project_dir = os.getenv("PROJECT_DIR", "/home/limcaoco/turbo/limcaoco/boltz_benchmark")
-    fasta_dir = os.path.join(project_dir, "input_files/fastas/")
+    project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+    fasta_dir = os.path.join(project_dir, output_dir)
     pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
     fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
     pdb_to_fasta(pdb_file, fasta_file)
@@ -86,62 +89,102 @@ def create_boltz_job(csv_file, pdb_file, output_dir):
     with open(fasta_file, 'r') as fasta:
         sequence = fasta.read().strip()
 
-    # Generate MSA using mmseqs2
-    if os.path.exists(os.path.join(project_dir, "input_files/msa", f"{pdb_name}_mmseqs2.a3m")):
-        print(f"MSA file already exists at {os.path.join(project_dir, 'input_files/msa', f'{pdb_name}_mmseqs2.a3m')}. Skipping MSA generation.")
+    if not covalent_docking:
 
-    print("now pregenerating MSA with mmseqs2...")
-    msa_dir = os.path.join(project_dir, "input_files/msa/")
-    os.makedirs(msa_dir, exist_ok=True)
-    msa_file = os.path.join(msa_dir, f"{pdb_name}_mmseqs2.a3m")
-    msa_result = run_mmseqs2(sequence, prefix=f"{msa_dir}/{pdb_name}")
-    with open(msa_file, 'w') as msa_output:
-        msa_output.write("\n".join(msa_result))
-    print(f"MSA saved to {msa_file}")
-    if not os.path.isfile(msa_file):
-        print(f"Error: MSA file '{msa_file}' was not created successfully.")
-        sys.exit(1)
+        # Generate MSA using mmseqs2
+        if os.path.exists(os.path.join(project_dir, "input_files/msa", f"{pdb_name}_mmseqs2.a3m")):
+            print(f"MSA file already exists at {os.path.join(project_dir, 'input_files/msa', f'{pdb_name}_mmseqs2.a3m')}. Skipping MSA generation.")
 
-    # Read CSV file
-    with open(csv_file, 'r') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            catalog_id = row["compound_ID"]
-            smiles = row["SMILES"]
-            smiles = check_smiles(smiles, verbose=True)
-            if smiles is None:
-                print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}")
-                continue
-            # Create .yaml file in the output directory
-            yaml_file = os.path.join(output_dir, f"{catalog_id}.yaml")
-            with open(yaml_file, 'w') as yaml:
-                yaml.write("version: 1\n")
-                yaml.write("sequences:\n")
-                yaml.write("  - protein:\n")
-                yaml.write("      id: A\n")
-                yaml.write(f"      sequence: {sequence}\n")
-                yaml.write(f"      msa: {msa_file}\n")
+        print("now pregenerating MSA with mmseqs2...")
+        msa_dir = os.path.join(project_dir, "input_files/msa/")
+        os.makedirs(msa_dir, exist_ok=True)
+        msa_file = os.path.join(msa_dir, f"{pdb_name}_mmseqs2.a3m")
+        msa_result = run_mmseqs2(sequence, prefix=f"{msa_dir}/{pdb_name}")
+        with open(msa_file, 'w') as msa_output:
+            msa_output.write("\n".join(msa_result))
+        print(f"MSA saved to {msa_file}")
+        if not os.path.isfile(msa_file):
+            print(f"Error: MSA file '{msa_file}' was not created successfully.")
+            sys.exit(1)
 
-                yaml.write("  - ligand:\n")
-                yaml.write(f"      id: B\n")
-                yaml.write(f"      smiles: '{smiles}'\n")
-                yaml.write("properties:\n")
-                yaml.write("  - affinity:\n")
-                yaml.write("      binder: B\n")
-    print(f"YAML files created successfully in {output_dir}.")
+        # Read CSV file
+        with open(csv_file, 'r') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                catalog_id = row["compound_ID"]
+                smiles = row["SMILES"]
+                smiles = check_smiles(smiles, verbose=True)
+                if smiles is None:
+                    print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}")
+                    continue
+                # Create .yaml file in the output directory
+                yaml_file = os.path.join(output_dir, f"{catalog_id}.yaml")
+                with open(yaml_file, 'w') as yaml:
+                    yaml.write("version: 1\n")
+                    yaml.write("sequences:\n")
+                    yaml.write("  - protein:\n")
+                    yaml.write("      id: A\n")
+                    yaml.write(f"      sequence: {sequence}\n")
+                    yaml.write(f"      msa: {msa_file}\n")
+
+                    yaml.write("  - ligand:\n")
+                    yaml.write(f"      id: B\n")
+                    yaml.write(f"      smiles: '{smiles}'\n")
+                    yaml.write("properties:\n")
+                    yaml.write("  - affinity:\n")
+                    yaml.write("      binder: B\n")
+    else:
+       
+        with open(pdb_file, 'r') as pdb:
+            for line in pdb:
+                if line.startswith("LINK"):
+                    atom1_name = line[13:17].strip()
+                    atom2_name = line[43:47].strip()
+
+                    res_idx = line[23:27].strip()
+                    res_name = line[17:21].strip()
+
+                    ccd = line[47:50].strip() 
+                    break 
+        yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml")
+        with open(yaml_file, 'w') as yaml:
+            yaml.write("version: 1\n")
+            yaml.write("sequences:\n")
+            yaml.write("  - protein:\n")
+            yaml.write("      id: A\n")
+            yaml.write(f"      sequence: {sequence}\n")
+            # yaml.write(f"      msa: {msa_file}\n")
+            yaml.write(f"      modification:\n")
+            yaml.write(f"        - position: {res_idx}\n") 
+            yaml.write(f"          ccd: {res_name}\n")
+
+            yaml.write("  - ligand:\n")
+            yaml.write(f"      id: LIG\n")
+            yaml.write(f"      ccd: '{ccd}'\n")
+            
+            yaml.write("constraints:\n")
+            yaml.write("    - bond:\n")
+            yaml.write(f"        atom1: [A, {res_idx}, {atom1_name}]\n")
+            yaml.write(f"        atom2: [LIG, 1, {atom2_name}]\n")
+
+            yaml.write("properties:\n")
+            yaml.write("    - affinity:\n")
+            yaml.write(f"        binder: LIG\n")
+    print(f"YAML files created successfully: {yaml_file}.")
 
 def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files.")
-    parser.add_argument("-i","--input_csv_file", type=str, required=True,help="Path to the input CSV file.")
+    parser.add_argument("-i","--input_csv_file", type=str, required=False,help="Path to the input CSV file. Required for non-covalent docking.")
     parser.add_argument("-p","--input_pdb_file", type=str, required=True,help="Path to the input PDB file.")
     parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory.")
-    #to impliment
-    parser.add_argument("-m","--mode", type=str, choices=["protein-protein", "virtual-screen"], required=True,default="virtual-screen", help="type of job to create, either protein-protein or virtual-screen. Default is virtual-screen.")
     parser.add_argument("-n", "--num_jobs", type=int, required=False, default=1, help="Number of jobs to create. Default is 1.")
-    parser.add_argument("-c", "--constraints_file", type=str, required=False, default=None, help="Path to the constraints file. Default is None.")
-    args = parser.parse_args()
+    parser.add_argument("-c", "--covalent_docking", action='store_true', default=False,help="Whether ligand must covlanetly interact with protein")
 
-    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory)
+    args = parser.parse_args()
+    if not args.covalent_docking and args.input_csv_file is None:
+        parser.error("--input_csv_file is required when --covalent_docking is False for non-covalent docking")
+
+    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory, args.covalent_docking)
 
 if __name__ == "__main__":
     main()
