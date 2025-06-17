@@ -9,7 +9,7 @@ import argparse
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-def check_smiles(smiles: str, verbose: bool = False):
+def check_smiles(smiles: str, verbose: bool = True):
     """
     Attempts to load and sanitize a SMILES string using RDKit.
     Returns a canonicalized SMILES string if successful, otherwise None.
@@ -135,7 +135,10 @@ def main():
     parser.add_argument("-i","--input_csv_file", type=str, required=True,help="Path to the input CSV file.")
     parser.add_argument("-p","--input_pdb_file", type=str, required=True,help="Path to the input PDB file.")
     parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory.")
-
+    #to impliment
+    parser.add_argument("-m","--mode", type=str, choices=["protein-protein", "virtual-screen"], required=True,default="virtual-screen", help="type of job to create, either protein-protein or virtual-screen. Default is virtual-screen.")
+    parser.add_argument("-n", "--num_jobs", type=int, required=False, default=1, help="Number of jobs to create. Default is 1.")
+    parser.add_argument("-c", "--constraints_file", type=str, required=False, default=None, help="Path to the constraints file. Default is None.")
     args = parser.parse_args()
 
     create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory)
