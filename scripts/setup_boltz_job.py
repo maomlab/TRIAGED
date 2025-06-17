@@ -9,6 +9,7 @@ import argparse
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
+
 def check_smiles(smiles: str, verbose: bool = True):
     """
     Attempts to load and sanitize a SMILES string using RDKit.
@@ -28,16 +29,10 @@ def check_smiles(smiles: str, verbose: bool = True):
             if verbose:
                 print(f"[ERROR] MolFromSmiles failed for: {smiles}")
             return None
-        
         # Attempt sanitization (includes valence check, aromaticity, Hs)
         Chem.SanitizeMol(mol)
-
-        # Optionally do other cleanups (like kekulization or 2D coordinates)
-        # AllChem.Compute2DCoords(mol)
-
         # Return the canonical SMILES
         return Chem.MolToSmiles(mol, canonical=True)
-
     except Exception as e:
         if verbose:
             print(f"[ERROR] Sanitization failed for SMILES: {smiles}\n{e}")
@@ -54,7 +49,7 @@ def ensure_environment_variables():
         print("Environment variables set successfully.")
 
 
-def create_boltz_job(csv_file, pdb_file, output_dir, covalent_docking=False):
+def create_boltz_job(csv_file, pdb_file, output_dir, num_jobs, covalent_docking=False):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
     :param csv_file: Path to the input CSV file.
@@ -65,8 +60,14 @@ def create_boltz_job(csv_file, pdb_file, output_dir, covalent_docking=False):
     # Ensure environment variables are set
     ensure_environment_variables()
 
-    # Ensure the output directory exists
-    os.makedirs(output_dir, exist_ok=True)
+    # Create directories based on num_jobs
+    if num_jobs > 1:
+        job_dirs = [f"{output_dir}_{i}" for i in range(1, num_jobs + 1)]
+        for job_dir in job_dirs:
+            os.makedirs(job_dir, exist_ok=True)
+    else:
+        job_dirs = [output_dir]
+        os.makedirs(output_dir, exist_ok=True)
 
     # Check if the PDB file exists
     if not os.path.isfile(pdb_file):
@@ -80,7 +81,7 @@ def create_boltz_job(csv_file, pdb_file, output_dir, covalent_docking=False):
     
     # Convert PDB to FASTA
     project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
-    fasta_dir = os.path.join(project_dir, output_dir)
+    fasta_dir = os.path.join(project_dir, "/input_files/fasta/")
     pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
     fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
     pdb_to_fasta(pdb_file, fasta_file)
@@ -110,29 +111,37 @@ def create_boltz_job(csv_file, pdb_file, output_dir, covalent_docking=False):
         # Read CSV file
         with open(csv_file, 'r') as csvfile:
             reader = csv.DictReader(csvfile)
-            for row in reader:
-                catalog_id = row["compound_ID"]
-                smiles = row["SMILES"]
-                smiles = check_smiles(smiles, verbose=True)
-                if smiles is None:
-                    print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}")
-                    continue
-                # Create .yaml file in the output directory
-                yaml_file = os.path.join(output_dir, f"{catalog_id}.yaml")
-                with open(yaml_file, 'w') as yaml:
-                    yaml.write("version: 1\n")
-                    yaml.write("sequences:\n")
-                    yaml.write("  - protein:\n")
-                    yaml.write("      id: A\n")
-                    yaml.write(f"      sequence: {sequence}\n")
-                    yaml.write(f"      msa: {msa_file}\n")
+            rows = list(reader)
+            # Distribute rows evenly across job directories
+            chunk_size = len(rows) // num_jobs
+            chunks = [rows[i * chunk_size:(i + 1) * chunk_size] for i in range(num_jobs)]
+            if len(rows) % num_jobs != 0:
+                chunks[-1].extend(rows[num_jobs * chunk_size:])
 
-                    yaml.write("  - ligand:\n")
-                    yaml.write(f"      id: B\n")
-                    yaml.write(f"      smiles: '{smiles}'\n")
-                    yaml.write("properties:\n")
-                    yaml.write("  - affinity:\n")
-                    yaml.write("      binder: B\n")
+            for job_dir, chunk in zip(job_dirs, chunks):
+                for row in chunk:
+                    catalog_id = row["compound_ID"]
+                    smiles = row["SMILES"]
+                    smiles = check_smiles(smiles, verbose=True)
+                    if smiles is None:
+                        print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}")
+                        continue
+                    # Create .yaml file in the job directory
+                    yaml_file = os.path.join(job_dir, f"{catalog_id}.yaml")
+                    with open(yaml_file, 'w') as yaml:
+                        yaml.write("version: 1\n")
+                        yaml.write("sequences:\n")
+                        yaml.write("  - protein:\n")
+                        yaml.write("      id: A\n")
+                        yaml.write(f"      sequence: {sequence}\n")
+                        yaml.write(f"      msa: {msa_file}\n")
+
+                        yaml.write("  - ligand:\n")
+                        yaml.write(f"      id: B\n")
+                        yaml.write(f"      smiles: '{smiles}'\n")
+                        yaml.write("properties:\n")
+                        yaml.write("  - affinity:\n")
+                        yaml.write("      binder: B\n")
     else:
        
         with open(pdb_file, 'r') as pdb:
@@ -170,7 +179,41 @@ def create_boltz_job(csv_file, pdb_file, output_dir, covalent_docking=False):
             yaml.write("properties:\n")
             yaml.write("    - affinity:\n")
             yaml.write(f"        binder: LIG\n")
-    print(f"YAML files created successfully: {yaml_file}.")
+    print(f"YAML files created successfully in directories: {', '.join(job_dirs)}.")
+
+
+def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_screen"):
+    """
+    Dynamically creates a SLURM submit script for Boltz jobs.
+    :param work_dir: Path to the working directory.
+    :param receptor: Name of the receptor.
+    :param output_dir: Path to the output directory.
+    :param job_name: Name of the SLURM job.
+    """
+    email = os.getenv("SLURM_EMAIL", "default_email@example.com")  # Use environment variable for email
+    slurm_script_path = os.path.join(output_dir, f"slurm_{receptor}.sh")
+    with open(slurm_script_path, "w") as slurm_script:
+        slurm_script.write(f"""#!/bin/bash
+#SBATCH --job-name={job_name}_{receptor}
+#SBATCH --mail-type=FAIL,END
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --time=24:00:00
+#SBATCH --account=maom99
+#SBATCH --partition=spgpu
+#SBATCH --gpus-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem-per-gpu=48000m
+#SBATCH --mail-user={email}
+#SBATCH --output={job_name}_{receptor}_slurm.log
+
+WORK_DIR={work_dir}
+RECEPTOR={receptor}
+mkdir -p ../outputs/${{RECEPTOR}}
+module load cuda cudnn
+boltz predict ${{WORK_DIR}} --out_dir ../outputs/${{RECEPTOR}} --num_workers 8
+""")
+    print(f"SLURM submit script created at {slurm_script_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files.")
@@ -184,8 +227,23 @@ def main():
     if not args.covalent_docking and args.input_csv_file is None:
         parser.error("--input_csv_file is required when --covalent_docking is False for non-covalent docking")
 
-    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory, args.covalent_docking)
-
+    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory, args.num_jobs, args.covalent_docking)
+    # Create SLURM submit script
+    if args.num_jobs > 1:
+        pdb_name= os.path.splitext(os.path.basename(args.input_pdb_file))[0]
+        for i in range(args.num_jobs):
+            create_slurm_submit_script(
+                work_dir=os.path.join(args.output_directory, f"{args.output_directory}_{i+1}"),
+                receptor=pdb_name,
+                output_dir=f"{pdb_name}_slurm_submit_{i+1}.sh",
+                job_name=f"boltz_screen"
+            )
+    else:
+        create_slurm_submit_script(
+                work_dir=os.path.join(args.output_directory, f"{args.output_directory}"),
+                receptor=pdb_name,
+                output_dir=f"{pdb_name}_slurm_submit_{i+1}.sh",
+                job_name=f"boltz_screen"
+            )
 if __name__ == "__main__":
     main()
-    
