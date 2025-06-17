@@ -143,7 +143,8 @@ This script aligns substructures from multiple Boltz2 job directories to a given
 #### Example Usage
 
 ```bash
-python compile_best_model_structures.py -p 3JQZ.pdb -d boltz_jobs -o 3JQZ_top_models.pdb```
+python compile_best_model_structures.py -p 3JQZ.pdb -d boltz_jobs -o 3JQZ_top_models.pdb
+```
 
 ### `single_boltz_job_alignment.py`
 
@@ -164,7 +165,8 @@ no parent is given, will default to the first modeled structure.
 #### Example Usage
 
 ```bash
-python single_boltz_job_alignment.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb```
+python single_boltz_job_alignment.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb
+```
 
 
 
