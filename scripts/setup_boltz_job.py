@@ -49,7 +49,9 @@ def ensure_environment_variables():
         print("Environment variables set successfully.")
 
 
-def create_boltz_job(csv_file, pdb_file, output_dir, num_jobs, covalent_docking=False):
+
+
+def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, covalent_docking=False):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
     :param csv_file: Path to the input CSV file.
@@ -57,8 +59,8 @@ def create_boltz_job(csv_file, pdb_file, output_dir, num_jobs, covalent_docking=
     :param output_dir: Path to the output directory.
     :param covalent_docking: Whether to write yaml for covalent docking. 
     """
-    # Ensure environment variables are set
-    ensure_environment_variables()
+    
+
 
     # Create directories based on num_jobs
     if num_jobs > 1:
@@ -69,23 +71,33 @@ def create_boltz_job(csv_file, pdb_file, output_dir, num_jobs, covalent_docking=
         job_dirs = [output_dir]
         os.makedirs(output_dir, exist_ok=True)
 
+
     # Check if the PDB file exists
-    if not os.path.isfile(pdb_file):
-        print(f"Error: PDB file '{pdb_file}' does not exist.")
-        sys.exit(1)
+    if pdb_file is not None:
+        print(f"Input PDB file: {pdb_file}")
+        print(f"generating FASTA file from PDB...")
+        if not os.path.isfile(pdb_file):
+            print(f"Error: PDB file '{pdb_file}' does not exist.")
+            sys.exit(1)
+        # Convert PDB to FASTA
+        project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+        fasta_dir = os.path.join(project_dir, "/input_files/fasta/")
+        pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
+        fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
+        pdb_to_fasta(args.input_pdb_file, fasta_file)
+        print(f"FASTA file created at {fasta_file}")
+    else:
+        project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+        pdb_name = os.path.splitext(os.path.basename(fasta_file))[0]
+        print(f"Using provided FASTA file: {fasta_file}")
+
     # Check if the CSV file exists only for non-covalent docking 
     if not covalent_docking:
         if not os.path.isfile(csv_file):
             print(f"Error: CSV file '{csv_file}' does not exist.")
             sys.exit(1)
     
-    # Convert PDB to FASTA
-    project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
-    fasta_dir = os.path.join(project_dir, "/input_files/fasta/")
-    pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
-    fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
-    pdb_to_fasta(pdb_file, fasta_file)
-    print(f"FASTA file created at {fasta_file}")
+    
     # Read the FASTA sequence
     with open(fasta_file, 'r') as fasta:
         sequence = fasta.read().strip()
@@ -191,7 +203,7 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
     :param job_name: Name of the SLURM job.
     """
     email = os.getenv("SLURM_EMAIL", "default_email@example.com")  # Use environment variable for email
-    slurm_script_path = os.path.join(output_dir, f"slurm_{receptor}.sh")
+    slurm_script_path = output_dir
     with open(slurm_script_path, "w") as slurm_script:
         slurm_script.write(f"""#!/bin/bash
 #SBATCH --job-name={job_name}_{receptor}
@@ -207,42 +219,55 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
 #SBATCH --mail-user={email}
 #SBATCH --output={job_name}_{receptor}_slurm.log
 
-WORK_DIR={work_dir}
-RECEPTOR={receptor}
 mkdir -p ../outputs/${{RECEPTOR}}
 module load cuda cudnn
-boltz predict ${{WORK_DIR}} --out_dir ../outputs/${{RECEPTOR}} --num_workers 8
+boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8
 """)
     print(f"SLURM submit script created at {slurm_script_path}")
 
 def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files.")
     parser.add_argument("-i","--input_csv_file", type=str, required=False,help="Path to the input CSV file. Required for non-covalent docking.")
-    parser.add_argument("-p","--input_pdb_file", type=str, required=True,help="Path to the input PDB file.")
+    parser.add_argument("-p","--input_pdb_file", type=str, required=False,help="Path to the input PDB file.")
+    parser.add_argument("-f","--input_fasta_file", type=str, required=False,help="Path to the input FASTA file. If provided, it will be used instead of generating from PDB.")
     parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory.")
     parser.add_argument("-n", "--num_jobs", type=int, required=False, default=1, help="Number of jobs to create. Default is 1.")
     parser.add_argument("-c", "--covalent_docking", action='store_true', default=False,help="Whether ligand must covlanetly interact with protein")
 
     args = parser.parse_args()
+   
+
+    if args.input_pdb_file is None and args.input_fasta_file is None:
+        print("Error: Either PDB file or FASTA file must be provided.")
+        sys.exit(1)
+    
     if not args.covalent_docking and args.input_csv_file is None:
         parser.error("--input_csv_file is required when --covalent_docking is False for non-covalent docking")
 
-    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory, args.num_jobs, args.covalent_docking)
+    # Ensure environment variables are set
+    ensure_environment_variables()
+
+    
+    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.input_fasta_file, args.output_directory, args.num_jobs, args.covalent_docking)
     # Create SLURM submit script
-    if args.num_jobs > 1:
+    if args.input_pdb_file is None:
+        pdb_name = os.path.splitext(os.path.basename(args.input_fasta_file))[0]
+    else:
         pdb_name= os.path.splitext(os.path.basename(args.input_pdb_file))[0]
+
+    if args.num_jobs > 1:
         for i in range(args.num_jobs):
             create_slurm_submit_script(
                 work_dir=os.path.join(args.output_directory, f"{args.output_directory}_{i+1}"),
                 receptor=pdb_name,
-                output_dir=f"{pdb_name}_slurm_submit_{i+1}.sh",
+                output_dir=f"../slurm_scripts/{pdb_name}_slurm_submit_{i+1}.sh",
                 job_name=f"boltz_screen"
             )
     else:
         create_slurm_submit_script(
                 work_dir=os.path.join(args.output_directory, f"{args.output_directory}"),
                 receptor=pdb_name,
-                output_dir=f"{pdb_name}_slurm_submit_{i+1}.sh",
+                output_dir=f"../slurm_scripts/{pdb_name}_slurm_submit.sh",
                 job_name=f"boltz_screen"
             )
 if __name__ == "__main__":
