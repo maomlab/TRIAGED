@@ -300,14 +300,14 @@ def main():
     if args.num_jobs > 1:
         for i in range(args.num_jobs):
             create_slurm_submit_script(
-                work_dir=os.path.join(args.output_directory, f"{args.output_directory}_{i+1}"),
+                work_dir=f"{args.output_directory}_{i+1}",
                 receptor=pdb_name,
                 output_dir=f"../slurm_scripts/{pdb_name}_slurm_submit_{i+1}.sh",
                 job_name=f"boltz_screen"
             )
     else:
         create_slurm_submit_script(
-                work_dir=os.path.join(args.output_directory, f"{args.output_directory}"),
+                work_dir=f"{args.output_directory}",
                 receptor=pdb_name,
                 output_dir=f"../slurm_scripts/{pdb_name}_slurm_submit.sh",
                 job_name=f"boltz_screen"
