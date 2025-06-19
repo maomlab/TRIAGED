@@ -33,6 +33,10 @@ For a virtual screen on a tetramer protein on 4 gpus:
 ```bash
 python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4 --protein_nmers
 ```
+An example real life command:
+```bash
+python setup_boltz_job.py -i ../input_files/activity_data/kcnq_compounds.csv -f ../input_files/fastas/KCNQ2.fasta -o ../boltz_inputs/KCNQ2 -n 4 --protein_nmers 4
+```
 
 #### Input CSV Requirements
 

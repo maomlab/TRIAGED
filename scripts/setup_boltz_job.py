@@ -48,6 +48,29 @@ def ensure_environment_variables():
         subprocess.run(f"source {setup_script}", shell=True, executable="/bin/bash", check=True)
         print("Environment variables set successfully.")
 
+def sanitize_compound_id(compound_ID):
+    """
+    Adjust the compound_ID to make it file-system friendly.
+    Parameters:
+    - compound_ID (str): The compound ID to sanitize.
+    Returns:
+    - str: The sanitized compound ID.
+    """
+    if any(char in compound_ID for char in [' ', '"', "'", ",", "(", ")", "/", "\\"]):
+        sanitized_compound_id = (
+            compound_ID.replace(" ", "_")  # Replace spaces with underscores
+                       .replace('"', '')    # Remove double quotes
+                       .replace("'", '')    # Remove single quotes
+                       .replace(",", '')    # Remove commas
+                       .replace("(", '')    # Remove parentheses
+                       .replace(")", '')    # Remove parentheses
+                       .replace("/", '_')   # Replace slashes with underscores
+                       .replace("\\", '_')  # Replace backslashes with underscores
+        )
+        print(f"Found invalid characters in compound ID '{compound_ID}'. Sanitized to '{sanitized_compound_id}'.")
+    else:
+        sanitized_compound_id = compound_ID
+    return sanitized_compound_id
 
 
 
@@ -133,19 +156,21 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             for job_dir, chunk in zip(job_dirs, chunks):
                 for row in chunk:
                     catalog_id = row["compound_ID"]
+                    #santizing
+                    catalog_id = sanitize_compound_id(catalog_id)
                     smiles = row["SMILES"]
                     smiles = check_smiles(smiles, verbose=True)
                     if smiles is None:
-                        print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}")
+                        print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}, skipping compound...")
                         continue
                     # Create .yaml file in the job directory
                     yaml_file = os.path.join(job_dir, f"{catalog_id}.yaml")
                     with open(yaml_file, 'w') as yaml:
+                        yaml.write(f"version: 1\n")
+                        yaml.write("sequences:\n")
                         if protein_nmers > 1:
                             for protein_nmer in range(1, protein_nmers + 1):
                                 chain_id=chr(ord('A') + protein_nmer - 1)
-                                yaml.write(f"version: 1\n")
-                                yaml.write("sequences:\n")
                                 yaml.write("  - protein:\n")
                                 yaml.write(f"      id: {chain_id}\n")
                                 yaml.write(f"      sequence: {sequence}\n")
@@ -238,7 +263,7 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
 
 mkdir -p ../outputs/${{RECEPTOR}}
 module load cuda cudnn
-boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8
+boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8 --method "md"
 """)
     print(f"SLURM submit script created at {slurm_script_path}")
 
