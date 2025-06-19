@@ -7,14 +7,31 @@ This script sets up Boltz job directories and generates `.yaml` files based on t
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
 | `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information. Not required when covalent docking.               |
-| `--input_pdb_file`     | `str`   | Yes      | Path to the input PDB file containing protein structure.                                                      |
+| `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
-| `--covalent_docking`   | `action`| No       | Whether ligand must covlanetly interact with protein.                                                         |
+| `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |
+| `--num_jobs`           | `int`   | No       | How may parallel submission directories and slurm submit scripts to generate depending on avaliable gpus      |
+| `--protein_nmers`      | `int`   | No       | How many subunits to model the receptor if it is a multimer                                                   |
+| `--covalent_docking`   | `bool`  | No       | Whether ligand must covlanetly interact with protein.                                                         |
 
 #### Example Usage
 
+For a simple virtual screen:
 ```bash
 python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory
+```
+optionally you can forgo the pdb file and just give the fasta file when using non-covelant docking:
+```bash
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_fasta_file /path/to/input.fasta --output_directory /path/to/output_directory
+```
+
+For a simple virtual screen on 4 gpus:
+```bash
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4
+```
+For a virtual screen on a tetramer protein on 4 gpus:
+```bash
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4 --protein_nmers
 ```
 
 #### Input CSV Requirements
@@ -38,9 +55,10 @@ You MUST use the --use-msa-server flag when running boltz for covalent docking.
 - The atoms involved the covalent bonds between ligand and covalent residue are found and included in the `.yaml` files. User input to indicate position of the bond is not required.
 ---
 
-### `slurm_run_boltz.sh`
+### SLURM scripts
 
-This script is a SLURM batch script for running Boltz jobs on a high-performance computing cluster.
+The script will automatically generate SLURM batch scripts for running Boltz jobs on a high-performance computing cluster with the pathing and inputs for boltz already set 
+to the generated input directories. By default these scripts will be generated in {Project_dir}/slurm_scripts
 
 #### Example Usage
 
@@ -48,15 +66,11 @@ This script is a SLURM batch script for running Boltz jobs on a high-performance
 sbatch slurm_run_boltz.sh
 ```
 
-
-
 ---
 
-## Notes
+## Future Features: aka work in progress
 
-- Ensure all input files are correctly formatted.
-- Use the provided `analysis_env.yaml` to set up the conda environment for dependencies.
-- For issues or questions, contact the repository maintainer.
+- generate_boltz_constrains: a method to automatically generate constraints to condition diffusion towards specific protein active states based on two input pdbs.
 
 
 # Analyze Boltz Predictions
@@ -73,13 +87,15 @@ This script processes Boltz predictions, computes metrics, and optionally perfor
   - `scoring_utils` (custom module)
   - Other dependencies listed in `scoring_utils.py`
 
+- Use the provided `analysis_env.yaml` to set up the conda environment for dependencies.
+
 ## Usage
 
 ### Command-Line Arguments
 
-| Argument               | Type    | Required | Default | Description                                                                 |
-|------------------------|---------|----------|---------|-----------------------------------------------------------------------------|
-| `-i`, `--input_directory` | `str`   | Yes      | None    | Directory containing Boltz predictions.                                    |
+| Argument                   | Type    | Required | Default | Description                                                                |
+|----------------------------|---------|----------|---------|----------------------------------------------------------------------------|
+| `-i`, `--input_directory`  | `str`   | Yes      | None    | Directory containing Boltz predictions.                                    |
 | `-o`, `--output_directory` | `str`   | Yes      | None    | Directory to save the processed output files.                              |
 | `-m`, `--compute_metrics`  | `bool`  | No       | `False` | Whether to compute metrics or not.                                         |
 | `-b`, `--bootstrap`        | `bool`  | No       | `False` | Whether to compute bootstrap metrics or not.                               |
