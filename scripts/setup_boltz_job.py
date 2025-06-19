@@ -51,7 +51,7 @@ def ensure_environment_variables():
 
 
 
-def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, covalent_docking=False):
+def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, covalent_docking=False, protein_nmers=1):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
     :param csv_file: Path to the input CSV file.
@@ -141,19 +141,36 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
                     # Create .yaml file in the job directory
                     yaml_file = os.path.join(job_dir, f"{catalog_id}.yaml")
                     with open(yaml_file, 'w') as yaml:
-                        yaml.write("version: 1\n")
-                        yaml.write("sequences:\n")
-                        yaml.write("  - protein:\n")
-                        yaml.write("      id: A\n")
-                        yaml.write(f"      sequence: {sequence}\n")
-                        yaml.write(f"      msa: {msa_file}\n")
+                        if protein_nmers > 1:
+                            for protein_nmer in range(1, protein_nmers + 1):
+                                chain_id=chr(ord('A') + protein_nmer - 1)
+                                yaml.write(f"version: 1\n")
+                                yaml.write("sequences:\n")
+                                yaml.write("  - protein:\n")
+                                yaml.write(f"      id: {chain_id}\n")
+                                yaml.write(f"      sequence: {sequence}\n")
+                                yaml.write(f"      msa: {msa_file}\n")
+                            ligand_chain_id=chr(ord('A') + protein_nmers)
+                            yaml.write("  - ligand:\n")
+                            yaml.write(f"      id: {ligand_chain_id}\n")
+                            yaml.write(f"      smiles: '{smiles}'\n")
+                            yaml.write("properties:\n")
+                            yaml.write("  - affinity:\n")
+                            yaml.write(f"      binder: {ligand_chain_id}\n")
+                        else:
+                            yaml.write("version: 1\n")
+                            yaml.write("sequences:\n")
+                            yaml.write("  - protein:\n")
+                            yaml.write("      id: A\n")
+                            yaml.write(f"      sequence: {sequence}\n")
+                            yaml.write(f"      msa: {msa_file}\n")
 
-                        yaml.write("  - ligand:\n")
-                        yaml.write(f"      id: B\n")
-                        yaml.write(f"      smiles: '{smiles}'\n")
-                        yaml.write("properties:\n")
-                        yaml.write("  - affinity:\n")
-                        yaml.write("      binder: B\n")
+                            yaml.write("  - ligand:\n")
+                            yaml.write(f"      id: B\n")
+                            yaml.write(f"      smiles: '{smiles}'\n")
+                            yaml.write("properties:\n")
+                            yaml.write("  - affinity:\n")
+                            yaml.write("      binder: B\n")
     else:
        
         with open(pdb_file, 'r') as pdb:
@@ -233,7 +250,7 @@ def main():
     parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory.")
     parser.add_argument("-n", "--num_jobs", type=int, required=False, default=1, help="Number of jobs to create. Default is 1.")
     parser.add_argument("-c", "--covalent_docking", action='store_true', default=False,help="Whether ligand must covlanetly interact with protein")
-
+    parser.add_argument("--protein_nmers", type=int, required=False, default=1, help="Number of protein nmers in the complex. Default is 1.")
     args = parser.parse_args()
    
 
@@ -248,7 +265,7 @@ def main():
     ensure_environment_variables()
 
     
-    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.input_fasta_file, args.output_directory, args.num_jobs, args.covalent_docking)
+    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.input_fasta_file, args.output_directory, args.num_jobs, args.covalent_docking, protein_nmers=args.protein_nmers)
     # Create SLURM submit script
     if args.input_pdb_file is None:
         pdb_name = os.path.splitext(os.path.basename(args.input_fasta_file))[0]
