@@ -13,8 +13,8 @@ def parse_args():
     "for PDB 3JQZ with all models in the 'boltz_jobs' directory:" \
     "python compile_best_model_structures -p 3JQZ.pdb -d boltz_jobs -o 3JQZ_top_models.pdb")
     parser.add_argument("-p", "--parent",
-                        help="Path to the parent file to align to. Can be CIF, " \
-                        "PDB, or MOL2. If no structure is given, will align to " \
+                        help="Path to the parent file to align to. Can be CIF " \
+                        "or PDB. If no structure is given, will align to " \
                         "first._0.cif in predictions directory.")
     parser.add_argument("-d", "--directory", required=True,
                         help="Root directory to search for 'predictions' " \
@@ -27,12 +27,25 @@ def parse_args():
                         "the output PDB. Defaults to all found.")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Enable verbose output.")
+    parser.add_argument("-ep", "--exclude_parent", action='store_true', default=False,
+                        help="OPTIONAL: If enabled, will exclude the parent trajectory" \
+                        "from the final output aligned PDB.")
     return parser.parse_args()
 
 def verbose_print(msg, verbose):
     """Prints message if verbose is True."""
     if verbose:
         print(msg)
+
+
+def convert_pdb_to_pdb(source_pdb_path, target_pdb_path):
+    """Standardize or reformat a PDB file."""
+    # Read the structure from the source PDB
+    structure = gemmi.read_structure(source_pdb_path)
+    
+    # Write the structure to the target PDB
+    structure.write_pdb(target_pdb_path)
+
 
 def convert_cif_to_pdb(cif_path, pdb_path):
     """Convert mmCIF to PDB using gemmi."""
@@ -136,10 +149,26 @@ def main():
 
     # Load parent structure
     parent_traj = load_structure(parent_file)
+    if (args.exclude_parent == False):
+        parent_pdb = os.path.join(temp_dir, "parent.pdb")
+        if parent_file.split(".")[-1].strip() == "cif":
+            convert_cif_to_pdb(parent_file, parent_pdb)
+            
+        elif parent_file.split(".")[-1].strip() == "pdb":
+            parent_pdb = os.path.join(temp_dir, "parent.pdb")
+            convert_pdb_to_pdb(parent_file, parent_pdb)
 
-    # Align and save models
-    aligned_trajectories = []
-    model_names = []
+        else:
+            print("Unsupported parent file type! Must be PDB or CIF!")
+            exit()
+
+        ptraj = md.load(parent_pdb)
+        
+        aligned_trajectories = [ptraj]
+        model_names = ["parent"]
+    else:
+        aligned_trajectories = []
+        model_names = []
 
     for idx, cif_path in enumerate(collected_files):
         if args.max_models is not None and idx >= args.max_models:
