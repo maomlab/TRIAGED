@@ -38,6 +38,23 @@ def convert_cif_to_pdb(cif_path, pdb_path):
     doc = gemmi.cif.read_file(cif_path)
     block = doc.sole_block()
     structure = gemmi.make_structure_from_block(block)
+    
+    # for cases where CCD code is used for chain name in CIF file 
+    used_names = set()
+    for model in structure:
+        for chain in model:
+            # truncate long names
+            old_name = chain.name
+            if len(old_name) > 1:
+                new_name = old_name[-1]
+
+                while new_name in used_names:
+                    new_name = chr(ord(new_name) + 1)
+                chain.name = new_name
+                used_names.add(new_name)
+            else:
+                used_names.add(old_name)
+
     structure.write_pdb(pdb_path)
 
 def get_matching_atoms(ref, traj):
@@ -102,7 +119,7 @@ def load_structure(filename):
     else:
         raise ValueError(f"Unsupported file format for {filename}")
 
-def main():
+def run_alignment(args):
     args = parse_args()
     temp_dir = tempfile.mkdtemp()
 
@@ -131,7 +148,6 @@ def main():
     model_names = []
 
     print(f"Found {len(cif_files)} substructure CIFs.")
-
     for idx, cif_path in enumerate(cif_files):
         if args.max_models is not None and idx >= args.max_models:
             break  # Stop processing more files if the maximum limit is reached
@@ -161,6 +177,10 @@ def main():
         print(f"\n✅ Saved aligned multi-model PDB: {args.output}")
     else:
         print("⚠️ No models were successfully aligned.")
+
+def main():
+    args = parse_args()
+    run_alignment(args)
 
 if __name__ == "__main__":
     main()
