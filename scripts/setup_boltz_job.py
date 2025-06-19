@@ -261,7 +261,7 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
 #SBATCH --mail-user={email}
 #SBATCH --output={job_name}_{receptor}_slurm.log
 
-mkdir -p ../outputs/${{RECEPTOR}}
+mkdir -p ../outputs/{receptor}
 module load cuda cudnn
 boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8 --method "md"
 """)
