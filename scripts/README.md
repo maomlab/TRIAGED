@@ -159,6 +159,9 @@ This script aligns substructures from multiple Boltz2 job directories to a given
  that all run Boltz2 jobs are contained in a single directory with predictions 
  located in subdirectories.
 
+By default, if a parent is specified, it will be the first model in the written PDB.
+ If the `-ep` flag is specified, the PARENT structure will be excluded.
+
 #### Command-Line Arguments
 
 | Argument               | Type    | Required | Description                                                                 |
@@ -167,6 +170,7 @@ This script aligns substructures from multiple Boltz2 job directories to a given
 | `-d`, `--directory`    | `str`   | Yes      | Root directory containing 'predictions' subdirectories with CIF files.     |
 | `-o`, `--output`       | `str`   | No       | Name for the output multi-model PDB file. Defaults to `aligned_models.pdb`.|
 | `--max-models`         | `int`   | No       | Maximum number of models to include in the output PDB. Defaults to all found.|
+| `-ep`, `--exclude_parent`|       | No       | If a PARENT is specified and flag is used, parent will not be saved to final output. |
 | `-v`, `--verbose`      |         | No       | Enable verbose output.                                                      |
 
 #### Example Usage
@@ -178,8 +182,11 @@ python compile_best_model_structures.py -p 3JQZ.pdb -d boltz_jobs -o 3JQZ_top_mo
 ### `compile_individual_mol_structures.py`
 
 This script aligns substructures from a single Boltz2 job directory to a 
-specified parent structure and saves the results as a multi-model PDB file. If
-no parent is given, will default to the first modeled structure.
+ specified parent structure and saves the results as a multi-model PDB file. If
+ no parent is given, will default to the first modeled structure.
+
+By default, if a parent is specified, it will be the first model in the written PDB.
+ If the `-ep` flag is specified, the PARENT structure will be excluded.
 
 #### Command-Line Arguments
 
@@ -189,6 +196,7 @@ no parent is given, will default to the first modeled structure.
 | `-d`, `--directory`    | `str`   | Yes      | Directory containing CIF substructures from a Boltz2 job.                  |
 | `-o`, `--output`       | `str`   | No       | Name for the output multi-model PDB file. Defaults to `aligned_models.pdb`.|
 | `--max-models`         | `int`   | No       | Maximum number of models to include in the output PDB. Defaults to all found in the directory. |
+| `-ep`, `--exclude_parent`|       | No       | If a PARENT is specified and flag is used, parent will not be saved to final output. |
 | `-v`, `--verbose`      |         | No       | Enable verbose output.                                                      |
 
 #### Example Usage
