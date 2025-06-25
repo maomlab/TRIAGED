@@ -7,11 +7,11 @@ from analysis_utils import read_boltz_predictions, compute_vscreen_metrics
 
 def main():
     parser = argparse.ArgumentParser(description="Process and format TLDR data.")
-    parser.add_argument("-i","--input_directory", type=str, required=True, help="Directory containing boltz predictions")
-    parser.add_argument("-o","--output_directory", type=str, required=True, help="Directory to save the processed output files.")    
-    parser.add_argument("-m", "--compute_metrics", action="store_true", help="Flag to compute metrics.")
+    parser.add_argument("-i","--input-directory", type=str, required=True, help="Directory containing boltz predictions")
+    parser.add_argument("-o","--output-directory", type=str, required=True, help="Directory to save the processed output files.")    
+    parser.add_argument("-m", "--compute-metrics", action="store_true", help="Flag to compute metrics.")
     parser.add_argument("-b", "--bootstrap", action="store_true", help="Flag to compute bootstrap metrics.")
-    parser.add_argument("-v","--in-vitro-data", type=str, required=False, default=None, help="Path to the in vitro data file, requires a column stating if compound is a binder or not. Default is None.")
+    parser.add_argument("-r","--reference-data", type=str, required=False, default=None, help="Path to the reference file, requires a column stating if compound is a binder or not. Default is None.")
     args = parser.parse_args()
 
     if not os.path.exists(args.output_directory):
@@ -32,6 +32,7 @@ def main():
             print("No in vitro data provided, skipping metric computation.")
         else:
             in_vitro_df = pd.read_csv(args.in_vitro_data)
+            print(in_vitro_df)
             if 'is_binder' not in in_vitro_df.columns:
                 raise ValueError("In vitro data must contain a column named 'is_binder' to indicate if the compound is a binder.")
             else:
@@ -41,6 +42,7 @@ def main():
                 
                 metrics_output = {}
                 for col in ["Affinity Pred Value",
+                                 "Affinity Probability Binary",
                                  "kcal/mol",
                                  "Ligand IPTM",
                                  "Complex pLDDT",
