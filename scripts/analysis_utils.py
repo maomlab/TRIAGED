@@ -20,7 +20,7 @@ def convert_IC_to_energy(IC):
     :param IC: IC50.
     :return: converted kcal/mol estimate.
     """
-    return (6 - IC) * 1.364
+    return -(6 - IC) * 1.364
 
 def read_boltz_predictions(predictions_dir):
     """
@@ -43,7 +43,7 @@ def read_boltz_predictions(predictions_dir):
             with open(affinity_file, 'r') as af:
                 affinity_data = json.load(af)
                 affinity_pred_value = affinity_data.get("affinity_pred_value", None)
-
+                affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
             with open(confidence_file, 'r') as cf:
                 confidence_data = json.load(cf)
                 confidence_score = confidence_data.get("confidence_score", None)
@@ -59,8 +59,9 @@ def read_boltz_predictions(predictions_dir):
             energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
 
             data.append({
-                "compound_id": compound_name,
+                "compound_ID": compound_name,
                 "Affinity Pred Value": affinity_pred_value,
+                "Affinity Probability Binary": affinity_probability_binary,
                 "Confidence Score": confidence_score,
                 "kcal/mol": energy_value,
                 "PTM": ptm,
@@ -165,7 +166,7 @@ def logAUC_from_dataframe(df, score_col, label_col):
     # Return adjusted log AUC
     return area / np.log10(LOGAUC_MAX / LOGAUC_MIN) - RANDOM_LOGAUC
 
-def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col, output_dir, compound_col='compound_id', return_curves=False, bootstrap=False):
+def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col, output_dir, compound_col='compound_ID', return_curves=False, bootstrap=False):
     # Replace '/' in score_col with 'kcal' for output file names
     sanitized_score_col = score_col.replace('/', 'kcal') if score_col == 'kcal/mol' else score_col
 

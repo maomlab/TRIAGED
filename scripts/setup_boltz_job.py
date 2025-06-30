@@ -42,7 +42,7 @@ def ensure_environment_variables():
     """
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
     """
-    if not os.getenv("PROJECT_DIR"):
+    if not os.getenv("PROJECT_DIR") or os.getenv(""):
         print("Environment variable PROJECT_DIR is not set. Running setup_enviorment.sh...")
         setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
         subprocess.run(f"source {setup_script}", shell=True, executable="/bin/bash", check=True)
@@ -72,6 +72,101 @@ def sanitize_compound_id(compound_ID):
         sanitized_compound_id = compound_ID
     return sanitized_compound_id
 
+
+def parse_input_csv(csv_file):
+    """
+    parse a CSV file with varying numbers of compound_ID, SMILES, and optional num columns.
+    Also supports optional cofactor_ID_X, cofactor_sequence_X, and cofactor_num_X columns.
+    If num_X or cofactor_num_X is missing or empty, it will be set to 1.
+
+    Parameters:
+    - csv_file: Path to the CSV file.
+
+    Returns:
+    - A list of dictionaries, where each dictionary contains compound_ID, SMILES, num, and optional cofactor data.
+    """
+    parsed_data = []
+
+    with open(csv_file, 'r') as csvfile:
+        reader = csv.DictReader(csvfile)
+        for row in reader:
+            compound_data = []
+            for key in row.keys():
+                if key.startswith("compound_ID") or key.startswith("peptide_ID") and row[key]:  
+                    
+                    if (len(key) > len("compound_ID")) or (len(key) > len("peptide_ID")):
+                        if key.startswith("compound_ID"):
+                            suffix = key[len("compound_ID"):]
+                        else:
+                            suffix = key[len("peptide_ID"):]  
+                        smiles_key = f"SMILES{suffix}" 
+                        
+                        num_key = f"num{suffix}"  
+                        peptide_id_key = f"peptide_ID{suffix}" 
+                        peptide_sequence_key = f"peptide_sequence{suffix}"  
+                        peptide_num_key = f"peptide_num{suffix}" 
+                    else:
+                        smiles_key = "SMILES"  
+                        num_key = "num"  
+                        peptide_id_key = "peptide_ID"  
+                        peptide_sequence_key = "peptide_sequence"  
+                        peptide_num_key = "peptide_num"  
+
+                    
+                    if key.startswith("compound_ID") and row[key]:
+                        if smiles_key in row and row[smiles_key]:
+                            compound_entry = {
+                                "compound_ID": row[key],
+                                "SMILES": row[smiles_key],
+                                "num": row[num_key] if num_key in row and row[num_key] else "1"  
+                            }
+                        compound_data.append(compound_entry)
+                    if key.startswith("peptide_ID") and row[key]:    
+                        if peptide_id_key in row and row[peptide_id_key]:
+                            compound_entry = {
+                                "peptide_ID": row[peptide_id_key],
+                                "peptide_sequence": row[peptide_sequence_key] if peptide_sequence_key in row else None,
+                                "peptide_num": row[peptide_num_key] if peptide_num_key in row and row[peptide_num_key] else "1" 
+                            }
+                        compound_data.append(compound_entry)
+            parsed_data.append(compound_data)
+
+    return parsed_data
+
+
+def generate_msa(project_dir, pdb_name, sequence):
+    """
+    Generate a Multiple Sequence Alignment (MSA) using mmseqs2.
+
+    Parameters:
+    - project_dir (str): The base project directory.
+    - pdb_name (str): The name of the PDB file (without extension).
+    - sequence (str): The sequence to use for MSA generation.
+
+    Returns:
+    - str: Path to the generated MSA file.
+    """
+    msa_dir = os.path.join(project_dir, "input_files/msa/")
+    msa_file = os.path.join(msa_dir, f"{pdb_name}_mmseqs2.a3m")
+
+    # Check if MSA file already exists
+    if os.path.exists(msa_file):
+        print(f"MSA file already exists at {msa_file}. Skipping MSA generation.")
+        
+
+    print("Now pregenerating MSA with mmseqs2...")
+    os.makedirs(msa_dir, exist_ok=True)
+
+    # Run mmseqs2 to generate MSA
+    msa_result = run_mmseqs2(sequence, prefix=f"{msa_dir}/{pdb_name}")
+    with open(msa_file, 'w') as msa_output:
+        msa_output.write("\n".join(msa_result))
+    print(f"MSA saved to {msa_file}")
+
+    # Verify that the MSA file was created successfully
+    if not os.path.isfile(msa_file):
+        print(f"Error: MSA file '{msa_file}' was not created successfully.")
+        sys.exit(1)
 
 
 def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, covalent_docking=False, protein_nmers=1):
@@ -128,76 +223,95 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
     if not covalent_docking:
 
         # Generate MSA using mmseqs2
-        if os.path.exists(os.path.join(project_dir, "input_files/msa", f"{pdb_name}_mmseqs2.a3m")):
-            print(f"MSA file already exists at {os.path.join(project_dir, 'input_files/msa', f'{pdb_name}_mmseqs2.a3m')}. Skipping MSA generation.")
-
-        print("now pregenerating MSA with mmseqs2...")
         msa_dir = os.path.join(project_dir, "input_files/msa/")
-        os.makedirs(msa_dir, exist_ok=True)
         msa_file = os.path.join(msa_dir, f"{pdb_name}_mmseqs2.a3m")
-        msa_result = run_mmseqs2(sequence, prefix=f"{msa_dir}/{pdb_name}")
-        with open(msa_file, 'w') as msa_output:
-            msa_output.write("\n".join(msa_result))
-        print(f"MSA saved to {msa_file}")
-        if not os.path.isfile(msa_file):
-            print(f"Error: MSA file '{msa_file}' was not created successfully.")
-            sys.exit(1)
+        generate_msa(project_dir, pdb_name, sequence)
+        
 
         # Read CSV file
-        with open(csv_file, 'r') as csvfile:
-            reader = csv.DictReader(csvfile)
-            rows = list(reader)
-            # Distribute rows evenly across job directories
-            chunk_size = len(rows) // num_jobs
-            chunks = [rows[i * chunk_size:(i + 1) * chunk_size] for i in range(num_jobs)]
-            if len(rows) % num_jobs != 0:
-                chunks[-1].extend(rows[num_jobs * chunk_size:])
+        parsed_data = parse_input_csv(csv_file)
+        
+        #generating MSA for peptides if peptide_ID is present in the CSV
+        for row in parsed_data:
+            for entry in row:
+                if "peptide_ID" in entry:
+                    peptide_msa = os.path.join(msa_dir, f"{entry['peptide_ID']}_peptide_mmseqs2.a3m")
+                    peptide_sequence = sequence
+                    if not os.path.isfile(peptide_msa):
+                        print(f"Generating MSA for peptides...")
+                        pdb_name = entry["peptide_ID"]
+                        peptide_msa = generate_msa(project_dir, pdb_name, peptide_sequence)          
 
-            for job_dir, chunk in zip(job_dirs, chunks):
-                for row in chunk:
-                    catalog_id = row["compound_ID"]
-                    #santizing
-                    catalog_id = sanitize_compound_id(catalog_id)
-                    smiles = row["SMILES"]
-                    smiles = check_smiles(smiles, verbose=True)
-                    if smiles is None:
-                        print(f"Invalid SMILES for compound ID {catalog_id}: {row['SMILES']}, skipping compound...")
-                        continue
-                    # Create .yaml file in the job directory
-                    yaml_file = os.path.join(job_dir, f"{catalog_id}.yaml")
-                    with open(yaml_file, 'w') as yaml:
-                        yaml.write(f"version: 1\n")
-                        yaml.write("sequences:\n")
-                        if protein_nmers > 1:
-                            for protein_nmer in range(1, protein_nmers + 1):
-                                chain_id=chr(ord('A') + protein_nmer - 1)
-                                yaml.write("  - protein:\n")
-                                yaml.write(f"      id: {chain_id}\n")
-                                yaml.write(f"      sequence: {sequence}\n")
-                                yaml.write(f"      msa: {msa_file}\n")
-                            ligand_chain_id=chr(ord('A') + protein_nmers)
-                            yaml.write("  - ligand:\n")
-                            yaml.write(f"      id: {ligand_chain_id}\n")
-                            yaml.write(f"      smiles: '{smiles}'\n")
-                            yaml.write("properties:\n")
-                            yaml.write("  - affinity:\n")
-                            yaml.write(f"      binder: {ligand_chain_id}\n")
-                        else:
-                            yaml.write("version: 1\n")
-                            yaml.write("sequences:\n")
+        chunk_size = len(parsed_data) // num_jobs
+        chunks = [parsed_data[i * chunk_size:(i + 1) * chunk_size] for i in range(num_jobs)]
+        if len(parsed_data) % num_jobs != 0:
+            chunks[-1].extend(parsed_data[num_jobs * chunk_size:])
+        for job_dir, chunk in zip(job_dirs, chunks):
+            for row in chunk:
+                
+                # Find the first compound_ID in the row to name the yaml_file
+                first_compound_id = None
+                for entry in row:
+                    if "compound_ID" in entry:
+                        first_compound_id = sanitize_compound_id(entry["compound_ID"])
+                        break
+                if first_compound_id:
+                    yaml_file = os.path.join(job_dir, f"{first_compound_id}.yaml")
+                
+                with open(yaml_file, 'w') as yaml:
+                    yaml.write(f"version: 1\n")
+                    yaml.write("sequences:\n")
+                    if protein_nmers > 1:
+                        for protein_nmer in range(1, protein_nmers + 1):
+                            chain_id = chr(ord('A') + protein_nmer - 1)
                             yaml.write("  - protein:\n")
-                            yaml.write("      id: A\n")
+                            yaml.write(f"      id: {chain_id}\n")
                             yaml.write(f"      sequence: {sequence}\n")
                             yaml.write(f"      msa: {msa_file}\n")
+                    else:
+                        yaml.write("  - protein:\n")
+                        yaml.write(f"      id: A\n")
+                        yaml.write(f"      sequence: {sequence}\n")
+                        yaml.write(f"      msa: {msa_file}\n")
+                    
+                    total_compound_num = 0
+                    for entry in row:   
+                        if "compound_ID" in entry:
+                            catalog_id = entry["compound_ID"]
+                            smiles = entry["SMILES"]
+                            num = entry.get("num", "1")  # Default to 1 if not provided
+                            # Sanitize and validate SMILES
+                            catalog_id = sanitize_compound_id(catalog_id)
+                            smiles = check_smiles(smiles, verbose=True)
+                            if smiles is None:
+                                print(f"Invalid SMILES for compound ID {catalog_id}, skipping...")
+                                continue
+                            for compound_num in range(1, int(num) + 1):
+                                ligand_chain_id = chr(ord('A') + (protein_nmers + total_compound_num))
+                                yaml.write("  - ligand:\n")
+                                yaml.write(f"      id: {ligand_chain_id}\n")
+                                yaml.write(f"      smiles: '{smiles}'\n")
+                                total_compound_num += 1
+                        elif "peptide_ID" in entry:
+                            peptide_id = entry["peptide_ID"]
+                            peptide_sequence = entry["peptide_sequence"]
+                            peptide_num = entry.get("peptide_num", "1")  # Default to 1 if not provided
+                            # Create .yaml file for the peptide
+                            for compound_num in range(1, int(peptide_num) + 1):
+                                for protein_nmer in range(1, protein_nmers + 1):
+                                    peptide_chain_id = chr(ord('A') + (protein_nmers + total_compound_num))
+                                    yaml.write("  - protein:\n")
+                                    yaml.write(f"      id: {peptide_chain_id}\n")
+                                    yaml.write(f"      sequence: {peptide_sequence}\n")
+                                    yaml.write(f"      msa: {peptide_msa}\n")
+                                    total_compound_num += 1
 
-                            yaml.write("  - ligand:\n")
-                            yaml.write(f"      id: B\n")
-                            yaml.write(f"      smiles: '{smiles}'\n")
-                            yaml.write("properties:\n")
-                            yaml.write("  - affinity:\n")
-                            yaml.write("      binder: B\n")
-    else:
-       
+                    yaml.write
+                    yaml.write("properties:\n")
+                    yaml.write("  - affinity:\n")
+                    yaml.write(f"      binder: {chr(ord('A') + (protein_nmers + compound_num - 1))}\n")
+
+    else: #do covelant method
         with open(pdb_file, 'r') as pdb:
             for line in pdb:
                 if line.startswith("LINK"):
@@ -216,7 +330,7 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             yaml.write("  - protein:\n")
             yaml.write("      id: A\n")
             yaml.write(f"      sequence: {sequence}\n")
-            # yaml.write(f"      msa: {msa_file}\n")
+                # yaml.write(f"      msa: {msa_file}\n")
             yaml.write(f"      modification:\n")
             yaml.write(f"        - position: {res_idx}\n") 
             yaml.write(f"          ccd: {res_name}\n")
@@ -224,7 +338,7 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             yaml.write("  - ligand:\n")
             yaml.write(f"      id: LIG\n")
             yaml.write(f"      ccd: '{ccd}'\n")
-            
+                
             yaml.write("constraints:\n")
             yaml.write("    - bond:\n")
             yaml.write(f"        atom1: [A, {res_idx}, {atom1_name}]\n")
@@ -233,7 +347,7 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             yaml.write("properties:\n")
             yaml.write("    - affinity:\n")
             yaml.write(f"        binder: LIG\n")
-    print(f"YAML files created successfully in directories: {', '.join(job_dirs)}.")
+        print(f"YAML files created successfully in directories: {', '.join(job_dirs)}.")
 
 
 def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_screen"):
