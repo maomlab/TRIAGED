@@ -68,6 +68,8 @@ ZINC0002,1,Cc1ccccc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]
    - `compound_ID_3`, `SMILES_3`: Information for the third compound.
    - `peptide_ID_1`, `peptide_sequence_1`: Information for the peptide.
 
+note: the num_{X} is a optional column, if not provided it will default to 1...
+
 - **Example Rows**:
    - Row 1: Includes `ZINC0001` (compound 1), cholesterol (compound 2), ATP (compound 3), and a peptide with sequence `ATCGATCGATCG`.
    - Row 2: Includes `ZINC0002` (compound 1), cholesterol (compound 2), ATP (compound 3), and a peptide with sequence `ATCLLATCLL`.
