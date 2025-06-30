@@ -14,9 +14,10 @@ def parse_args():
     "python compile_best_model_structures -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1"\
     " -o 3JQZ_top_models.pdb")
     parser.add_argument("-p", "--parent", 
-                        help="Path to the parent file to align to. Can be CIF," \
-                        " PDB, or MOL2. If no structure is given, will align to " \
+                        help="Path to the parent file to align to. Can be CIF" \
+                        " or PDB. If no structure is given, will align to " \
                         "first structure in DIRECTORY.")
+    
     parser.add_argument("-d", "--directory", required=True, 
                         help="Directory of CIF substructures from Boltz2.")
     parser.add_argument("-o", "--output", default="aligned_models.pdb", 
@@ -26,12 +27,25 @@ def parse_args():
                         "the output PDB. Defaults to all in the directory.")
     parser.add_argument("--verbose", "-v", action="store_true", 
                         help="Enable verbose output.")
+    parser.add_argument("-ep", "--exclude_parent", action='store_true', default=False,
+                        help="OPTIONAL: If enabled, will exclude the parent trajectory" \
+                        "from the final output aligned PDB.")
     return parser.parse_args()
 
 def verbose_print(msg, verbose):
     """Prints message if verbose is True."""
     if verbose:
         print(msg)
+
+
+def convert_pdb_to_pdb(source_pdb_path, target_pdb_path):
+    """Standardize or reformat a PDB file."""
+    # Read the structure from the source PDB
+    structure = gemmi.read_structure(source_pdb_path)
+    
+    # Write the structure to the target PDB
+    structure.write_pdb(target_pdb_path)
+
 
 def convert_cif_to_pdb(cif_path, pdb_path):
     """Convert mmCIF to PDB using gemmi."""
@@ -89,15 +103,13 @@ def save_with_model_names(trajs, filenames, output_path):
             os.remove(temp_pdb_path)
 
 def load_structure(filename):
-    """Loads a structure file which can be CIF, PDB, or MOL2."""
+    """Loads a structure file which can be CIF or PDB"""
     extension = os.path.splitext(filename)[1].lower()
     if extension == '.cif':
         temp_pdb = tempfile.NamedTemporaryFile(suffix=".pdb", delete=False).name
         convert_cif_to_pdb(filename, temp_pdb)
         return md.load(temp_pdb)
     elif extension == '.pdb':
-        return md.load(filename)
-    elif extension == '.mol2':
         return md.load(filename)
     else:
         raise ValueError(f"Unsupported file format for {filename}")
@@ -110,26 +122,44 @@ def main():
                   args.verbose)
 
     # Find the parent structure
-    parent_cif = args.parent
+    parent_file = args.parent
     cif_files = glob.glob(os.path.join(args.directory, "*.cif"))
     cif_files.sort(key=extract_key)
 
     # Use first CIF as parent if not provided
-    if not parent_cif:
+    if not parent_file:
         if cif_files:
-            parent_cif = cif_files[0]
-            verbose_print(f"No parent provided. Using {parent_cif} as the parent structure.", args.verbose)
+            parent_file = cif_files[0]
+            verbose_print(f"No parent provided. Using {parent_file} as the parent structure.", args.verbose)
         else:
             print("❌ No CIF files available to process.")
             return
 
     # Load parent structure
-    parent_traj = load_structure(parent_cif)
+    parent_traj = load_structure(parent_file)
+    if (args.exclude_parent == False):
+        parent_pdb = os.path.join(temp_dir, "parent.pdb")
+        if parent_file.split(".")[-1].strip() == "cif":
+            convert_cif_to_pdb(parent_file, parent_pdb)
+            
+        elif parent_file.split(".")[-1].strip() == "pdb":
+            parent_pdb = os.path.join(temp_dir, "parent.pdb")
+            convert_pdb_to_pdb(parent_file, parent_pdb)
+
+        else:
+            print("Unsupported parent file type! Must be PDB or CIF!")
+            exit()
+
+        ptraj = md.load(parent_pdb)
+        
+        aligned_trajectories = [ptraj]
+        model_names = ["parent"]
+    else:
+        aligned_trajectories = []
+        model_names = []
+
 
     # Loop through substructure CIFs
-    aligned_trajectories = []
-    model_names = []
-
     print(f"Found {len(cif_files)} substructure CIFs.")
 
     for idx, cif_path in enumerate(cif_files):
