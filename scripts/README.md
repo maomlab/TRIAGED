@@ -46,6 +46,35 @@ The input CSV file must contain the following columns:
 For covalent ligand docking, do NOT use an input CSV. Only povide input pdb file and output directory paths. 
 Covalent docking by boltz is currently only supported for CCD ligands. 
 
+#### Advanced Modeling Features Branch 
+
+If you have the Advanced Modeling Features development branch there is now experimental support for setting up more complex Boltz simulations. The command line options for the script remain the same but you can now detail more complex systems via a csv file and setup_boltz_job.py will be able to handle it.
+
+For example, if you have a system where you want to dock a compound in a virtual screen and the target is known to also have interactions with 4 subunits of cholesterol, atp, and a modulating peptide, you can setup a virtual screen with all these additional biomolecules with the following format:
+
+#### Example CSV Format for Complex Systems
+
+Below is an example of how to format a CSV file for setting up a virtual screen with additional biomolecules (e.g., cholesterol, ATP, and peptides):
+
+```csv
+compound_ID_1,num_1,SMILES_1,compound_ID_2,num_2,SMILES_2,compound_ID_3,SMILES_3,peptide_ID_1,peptide_sequence_1
+ZINC0001,1,CC(=O)Nc1ccc(C)cc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,ATP,C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)COP(=O)(O)OP(=O)(O)OP(=O)(O)O)O)O)N,peptide_1,ATCGATCGATCG
+ZINC0002,1,Cc1ccccc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,ATP,C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)COP(=O)(O)OP(=O)(O)OP(=O)(O)O)O)O)N,peptide_2,ATCLLATCLL
+```
+
+- **Columns**:
+   - `compound_ID_1`, `num_1`, `SMILES_1`: Information for the first compound. (compound name, number of x compound to dock, smiles)
+   - `compound_ID_2`, `num_2`, `SMILES_2`: Information for the second compound.
+   - `compound_ID_3`, `SMILES_3`: Information for the third compound.
+   - `peptide_ID_1`, `peptide_sequence_1`: Information for the peptide.
+
+- **Example Rows**:
+   - Row 1: Includes `ZINC0001` (compound 1), cholesterol (compound 2), ATP (compound 3), and a peptide with sequence `ATCGATCGATCG`.
+   - Row 2: Includes `ZINC0002` (compound 1), cholesterol (compound 2), ATP (compound 3), and a peptide with sequence `ATCLLATCLL`.
+
+This format allows you to specify multiple compounds and peptides to be docked to complex systems in a single CSV file.
+The script will also generate the .yaml inputs in convient number parallel batch directories with associated slurm submit scripts with the use of the --num_jobs flag if you so desire. As of right now, the affinity will be only computed for the first compound i.e compound_ID_1 given, though by default confidence model scores will be generated for all biomolecules (updated analysis scripts is in my TODO list)
+
 #### Output
 For non-covalent docking:
 - `.a3m` MSA files are pregenerated using the mmseqs2 server, you do not need to have --use-msa-server flag in boltz
