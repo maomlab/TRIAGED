@@ -7,14 +7,35 @@ This script sets up Boltz job directories and generates `.yaml` files based on t
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
 | `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information. Not required when covalent docking.               |
-| `--input_pdb_file`     | `str`   | Yes      | Path to the input PDB file containing protein structure.                                                      |
+| `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
-| `--covalent_docking`   | `action`| No       | Whether ligand must covlanetly interact with protein.                                                         |
+| `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |
+| `--num_jobs`           | `int`   | No       | How may parallel submission directories and slurm submit scripts to generate depending on avaliable gpus      |
+| `--protein_nmers`      | `int`   | No       | How many subunits to model the receptor if it is a multimer                                                   |
+| `--covalent_docking`   | `bool`  | No       | Whether ligand must covlanetly interact with protein.                                                         |
 
 #### Example Usage
 
+For a simple virtual screen:
 ```bash
 python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory
+```
+optionally you can forgo the pdb file and just give the fasta file when using non-covelant docking:
+```bash
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_fasta_file /path/to/input.fasta --output_directory /path/to/output_directory
+```
+
+For a simple virtual screen on 4 gpus:
+```bash
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4
+```
+For a virtual screen on a tetramer protein on 4 gpus:
+```bash
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4 --protein_nmers
+```
+An example real life command:
+```bash
+python setup_boltz_job.py -i ../input_files/activity_data/kcnq_compounds.csv -f ../input_files/fastas/KCNQ2.fasta -o ../boltz_inputs/KCNQ2 -n 4 --protein_nmers 4
 ```
 
 #### Input CSV Requirements
@@ -38,9 +59,10 @@ You MUST use the --use-msa-server flag when running boltz for covalent docking.
 - The atoms involved the covalent bonds between ligand and covalent residue are found and included in the `.yaml` files. User input to indicate position of the bond is not required.
 ---
 
-### `slurm_run_boltz.sh`
+### SLURM scripts
 
-This script is a SLURM batch script for running Boltz jobs on a high-performance computing cluster.
+The script will automatically generate SLURM batch scripts for running Boltz jobs on a high-performance computing cluster with the pathing and inputs for boltz already set 
+to the generated input directories. By default these scripts will be generated in {Project_dir}/slurm_scripts
 
 #### Example Usage
 
@@ -48,15 +70,11 @@ This script is a SLURM batch script for running Boltz jobs on a high-performance
 sbatch slurm_run_boltz.sh
 ```
 
-
-
 ---
 
-## Notes
+## Future Features: aka work in progress
 
-- Ensure all input files are correctly formatted.
-- Use the provided `analysis_env.yaml` to set up the conda environment for dependencies.
-- For issues or questions, contact the repository maintainer.
+- generate_boltz_constrains: a method to automatically generate constraints to condition diffusion towards specific protein active states based on two input pdbs.
 
 
 # Analyze Boltz Predictions
@@ -73,13 +91,15 @@ This script processes Boltz predictions, computes metrics, and optionally perfor
   - `scoring_utils` (custom module)
   - Other dependencies listed in `scoring_utils.py`
 
+- Use the provided `analysis_env.yaml` to set up the conda environment for dependencies.
+
 ## Usage
 
 ### Command-Line Arguments
 
-| Argument               | Type    | Required | Default | Description                                                                 |
-|------------------------|---------|----------|---------|-----------------------------------------------------------------------------|
-| `-i`, `--input_directory` | `str`   | Yes      | None    | Directory containing Boltz predictions.                                    |
+| Argument                   | Type    | Required | Default | Description                                                                |
+|----------------------------|---------|----------|---------|----------------------------------------------------------------------------|
+| `-i`, `--input_directory`  | `str`   | Yes      | None    | Directory containing Boltz predictions.                                    |
 | `-o`, `--output_directory` | `str`   | Yes      | None    | Directory to save the processed output files.                              |
 | `-m`, `--compute_metrics`  | `bool`  | No       | `False` | Whether to compute metrics or not.                                         |
 | `-b`, `--bootstrap`        | `bool`  | No       | `False` | Whether to compute bootstrap metrics or not.                               |
@@ -139,6 +159,9 @@ This script aligns substructures from multiple Boltz2 job directories to a given
  that all run Boltz2 jobs are contained in a single directory with predictions 
  located in subdirectories.
 
+By default, if a parent is specified, it will be the first model in the written PDB.
+ If the `-ep` flag is specified, the PARENT structure will be excluded.
+
 #### Command-Line Arguments
 
 | Argument               | Type    | Required | Description                                                                 |
@@ -147,18 +170,23 @@ This script aligns substructures from multiple Boltz2 job directories to a given
 | `-d`, `--directory`    | `str`   | Yes      | Root directory containing 'predictions' subdirectories with CIF files.     |
 | `-o`, `--output`       | `str`   | No       | Name for the output multi-model PDB file. Defaults to `aligned_models.pdb`.|
 | `--max-models`         | `int`   | No       | Maximum number of models to include in the output PDB. Defaults to all found.|
+| `-ep`, `--exclude_parent`|       | No       | If a PARENT is specified and flag is used, parent will not be saved to final output. |
 | `-v`, `--verbose`      |         | No       | Enable verbose output.                                                      |
 
 #### Example Usage
 
 ```bash
-python compile_best_model_structures.py -p 3JQZ.pdb -d boltz_jobs -o 3JQZ_top_models.pdb```
+python compile_best_model_structures.py -p 3JQZ.pdb -d boltz_jobs -o 3JQZ_top_models.pdb
+```
 
 ### `compile_individual_mol_structures.py`
 
 This script aligns substructures from a single Boltz2 job directory to a 
-specified parent structure and saves the results as a multi-model PDB file. If
-no parent is given, will default to the first modeled structure.
+ specified parent structure and saves the results as a multi-model PDB file. If
+ no parent is given, will default to the first modeled structure.
+
+By default, if a parent is specified, it will be the first model in the written PDB.
+ If the `-ep` flag is specified, the PARENT structure will be excluded.
 
 #### Command-Line Arguments
 
@@ -168,12 +196,18 @@ no parent is given, will default to the first modeled structure.
 | `-d`, `--directory`    | `str`   | Yes      | Directory containing CIF substructures from a Boltz2 job.                  |
 | `-o`, `--output`       | `str`   | No       | Name for the output multi-model PDB file. Defaults to `aligned_models.pdb`.|
 | `--max-models`         | `int`   | No       | Maximum number of models to include in the output PDB. Defaults to all found in the directory. |
+| `-ep`, `--exclude_parent`|       | No       | If a PARENT is specified and flag is used, parent will not be saved to final output. |
 | `-v`, `--verbose`      |         | No       | Enable verbose output.                                                      |
 
 #### Example Usage
 
 ```bash
+<<<<<<< HEAD:scripts/README
 python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb```
+=======
+python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb
+```
+>>>>>>> master:scripts/README.md
 
 
 

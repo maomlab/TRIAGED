@@ -15,6 +15,7 @@ from statsmodels.stats import weightstats as stests
 
 def convert_IC_to_energy(IC):
     """
+    From README docs of boltz2:
     Convert IC (IC50) to kcal/mol.
     :param IC: IC50.
     :return: converted kcal/mol estimate.

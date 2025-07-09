@@ -1,18 +1,18 @@
 #!/bin/bash
-#SBATCH --job-name=sigma_boltz_screen
+#SBATCH --job-name=ampc_boltz_screen
 #SBATCH --mail-type=FAIL,END
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 #SBATCH --account=maom99
 #SBATCH --partition=spgpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem-per-gpu=40000m
+#SBATCH --mem-per-gpu=48000m
 #SBATCH --mail-user=limcaoco@umich.edu
-#SBATCH --output=sigma_boltz_slurm.log
+#SBATCH --output=ampc_boltz_slurm.log
 
-#mem can be 20000 or 36000
+
 WORK_DIR=${1}
 RECEPTOR=${2}
 BOLTZ_PATH=/home/limcaoco/opt/boltz
