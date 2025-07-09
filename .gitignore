@@ -199,4 +199,5 @@ cython_debug/
 .cursorindexingignore
 
 # ymanasa
+scripts/__pycache__
 scripts/test_rmsd.ipynb

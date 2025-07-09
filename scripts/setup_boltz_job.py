@@ -84,12 +84,7 @@ def create_boltz_job(pdb_file, output_dir, csv_file=None, covalent_docking=False
     project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
     fasta_dir = os.path.join(project_dir, output_dir)
     pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
-    fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
-    # pdb_to_fasta(pdb_file, fasta_file)
     sequence = build_fasta_seq(pdb_name)
-    # Read the FASTA sequence
-    # with open(fasta_file, 'r') as fasta:
-    #     sequence = fasta.read().strip()
 
     if not covalent_docking:
 
