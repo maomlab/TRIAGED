@@ -176,6 +176,15 @@ def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col, output_dir, comp
     df_neg['label'] = 0
     df_truth = pd.concat([df_pos, df_neg], ignore_index=True)
     df_merged = pd.merge(df_truth, df_pred[[compound_col, score_col]], on=compound_col)
+
+    if f"{score_col}_x" in df_merged.columns and f"{score_col}_y" in df_merged.columns:
+        df_merged[score_col] = df_merged[f"{score_col}_y"]
+        df_merged.drop(columns=[f"{score_col}_x", f"{score_col}_y"], inplace=True)
+
+    #print(df_pred)
+    #print(df_truth)
+    #print(df_merged)
+
     df_sorted = df_merged.sort_values(by=score_col, ascending=False).reset_index(drop=True)
 
     n_total = len(df_sorted)

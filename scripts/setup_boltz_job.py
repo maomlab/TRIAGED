@@ -198,14 +198,14 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             print(f"Error: PDB file '{pdb_file}' does not exist.")
             sys.exit(1)
         # Convert PDB to FASTA
-        project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+        project_dir = os.getenv("PROJECT_DIR")
         fasta_dir = os.path.join(project_dir, "/input_files/fasta/")
         pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
         fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
         pdb_to_fasta(args.input_pdb_file, fasta_file)
         print(f"FASTA file created at {fasta_file}")
     else:
-        project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+        project_dir = os.getenv("PROJECT_DIR")
         pdb_name = os.path.splitext(os.path.basename(fasta_file))[0]
         print(f"Using provided FASTA file: {fasta_file}")
 
@@ -218,7 +218,8 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
     
     # Read the FASTA sequence
     with open(fasta_file, 'r') as fasta:
-        sequence = fasta.read().strip()
+        lines = fasta.readlines()
+        sequence = "".join(line.strip() for line in lines if not line.startswith(">"))
 
     if not covalent_docking:
 
