@@ -75,7 +75,7 @@ def sanitize_compound_id(compound_ID):
 
 def parse_input_csv(csv_file):
     """
-    parse a CSV file with varying numbers of compound_ID, SMILES, and optional num columns.
+    Parse a CSV file with varying numbers of compound_ID, SMILES, and optional num columns.
     Also supports optional cofactor_ID_X, cofactor_sequence_X, and cofactor_num_X columns.
     If num_X or cofactor_num_X is missing or empty, it will be set to 1.
 
@@ -116,17 +116,17 @@ def parse_input_csv(csv_file):
                     if key.startswith("compound_ID") and row[key]:
                         if smiles_key in row and row[smiles_key]:
                             compound_entry = {
-                                "compound_ID": row[key],
-                                "SMILES": row[smiles_key],
-                                "num": row[num_key] if num_key in row and row[num_key] else "1"  
+                                "compound_ID": row[key].strip(),
+                                "SMILES": row[smiles_key].strip(),
+                                "num": row[num_key].strip() if num_key in row and row[num_key] else "1"  
                             }
                         compound_data.append(compound_entry)
                     if key.startswith("peptide_ID") and row[key]:    
                         if peptide_id_key in row and row[peptide_id_key]:
                             compound_entry = {
-                                "peptide_ID": row[peptide_id_key],
-                                "peptide_sequence": row[peptide_sequence_key] if peptide_sequence_key in row else None,
-                                "peptide_num": row[peptide_num_key] if peptide_num_key in row and row[peptide_num_key] else "1" 
+                                "peptide_ID": row[peptide_id_key].strip(),
+                                "peptide_sequence": row[peptide_sequence_key].strip() if peptide_sequence_key in row and row[peptide_sequence_key] else None,
+                                "peptide_num": row[peptide_num_key].strip() if peptide_num_key in row and row[peptide_num_key] else "1" 
                             }
                         compound_data.append(compound_entry)
             parsed_data.append(compound_data)
@@ -378,7 +378,7 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
 
 mkdir -p ../outputs/{receptor}
 module load cuda cudnn
-boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8 --method "md"
+boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8
 """)
     print(f"SLURM submit script created at {slurm_script_path}")
 
