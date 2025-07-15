@@ -28,19 +28,39 @@ def main():
     if args.compute_metrics:
         # Compute metrics if required
         print("Computing metrics...")
-        if args.in_vitro_data is None:
-            print("No in vitro data provided, skipping metric computation.")
+        if args.reference_data is None:
+            print("No reference data provided, skipping metric computation.")
         else:
-            in_vitro_df = pd.read_csv(args.in_vitro_data)
-            print(in_vitro_df)
-            if 'is_binder' not in in_vitro_df.columns:
-                raise ValueError("In vitro data must contain a column named 'is_binder' to indicate if the compound is a binder.")
+            reference_df = pd.read_csv(args.reference_data)
+            print(reference_df)
+            if 'is_binder' not in reference_df.columns:
+                raise ValueError("Reference data must contain a column named 'is_binder' to indicate if the compound is a binder.")
             else:
-                positive_df = in_vitro_df[in_vitro_df['is_binder'] == True]
-                negative_df = in_vitro_df[in_vitro_df['is_binder'] == False]
+                positive_df = reference_df[reference_df['is_binder'] == True]
+                negative_df = reference_df[reference_df['is_binder'] == False]
                 print(f"True Positive compounds: {len(positive_df)}, True Negative compounds: {len(negative_df)}")
                 
                 metrics_output = {}
+                #computing for "DOCK score" or "score"
+                print(reference_df.columns)
+                if 'DOCK score' in reference_df.columns:
+                    metrics = compute_vscreen_metrics(positive_df, negative_df, reference_df, 'DOCK score', args.output_directory)
+                    print(f"Metrics for DOCK score: {metrics}")
+                    metrics_output['DOCK score'] = {"Metrics": metrics}
+                    bootstrap_metrics = compute_vscreen_metrics(positive_df, negative_df, reference_df, 'DOCK score', args.output_directory, bootstrap=True)
+                    print(f"Bootstrap metrics for DOCK score: {bootstrap_metrics}")
+                    metrics_output['DOCK score']["Bootstrap_Metrics"] = bootstrap_metrics
+                elif 'score' in reference_df.columns:    
+                    metrics = compute_vscreen_metrics(positive_df, negative_df, reference_df, 'score', args.output_directory)
+                    print(f"Metrics for DOCK score: {metrics}")
+                    metrics_output['DOCK score'] = {"Metrics": metrics}
+                    bootstrap_metrics = compute_vscreen_metrics(positive_df, negative_df, reference_df, 'score', args.output_directory, bootstrap=True)
+                    print(f"Bootstrap metrics for DOCK score: {bootstrap_metrics}")
+                    metrics_output['DOCK score']["Bootstrap_Metrics"] = bootstrap_metrics
+                else:
+                    print("No 'DOCK score' or 'score' column found in reference data, skipping metric computation for these columns.")
+
+
                 for col in ["Affinity Pred Value",
                                  "Affinity Probability Binary",
                                  "kcal/mol",
