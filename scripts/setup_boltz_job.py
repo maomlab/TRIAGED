@@ -3,8 +3,10 @@ import csv
 import sys
 import subprocess
 from pdb_to_fasta import pdb_to_fasta
+from fasta_utils import build_fasta_seq
 from mmseqs2 import run_mmseqs2
 import argparse
+from covalent_utils import get_link_atoms
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -43,7 +45,7 @@ def ensure_environment_variables():
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
     """
     if not os.getenv("PROJECT_DIR"):
-        print("Environment variable PROJECT_DIR is not set. Running setup_enviorment.sh...")
+        # print("Environment variable PROJECT_DIR is not set. Running setup_enviorment.sh...")
         setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
         subprocess.run(f"source {setup_script}", shell=True, executable="/bin/bash", check=True)
         print("Environment variables set successfully.")
@@ -77,7 +79,7 @@ def sanitize_compound_id(compound_ID):
 def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, covalent_docking=False, protein_nmers=1):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
-    :param csv_file: Path to the input CSV file.
+    :param csv_file: Path to the input CSV file. Not required for covalent docking. 
     :param pdb_file: Path to the input PDB file.
     :param output_dir: Path to the output directory.
     :param covalent_docking: Whether to write yaml for covalent docking. 
@@ -103,27 +105,34 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             print(f"Error: PDB file '{pdb_file}' does not exist.")
             sys.exit(1)
         # Convert PDB to FASTA
-        project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+        project_dir = os.getenv("PROJECT_DIR")
         fasta_dir = os.path.join(project_dir, "/input_files/fasta/")
         pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
         fasta_file = os.path.join(fasta_dir, f"{pdb_name}.fasta")
-        pdb_to_fasta(args.input_pdb_file, fasta_file)
+        pdb_to_fasta(pdb_file, fasta_file)
         print(f"FASTA file created at {fasta_file}")
     else:
-        project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
+        project_dir = os.getenv("PROJECT_DIR")
         pdb_name = os.path.splitext(os.path.basename(fasta_file))[0]
         print(f"Using provided FASTA file: {fasta_file}")
 
     # Check if the CSV file exists only for non-covalent docking 
     if not covalent_docking:
-        if not os.path.isfile(csv_file):
+        if not csv_file or not os.path.isfile(csv_file):
             print(f"Error: CSV file '{csv_file}' does not exist.")
             sys.exit(1)
     
     
     # Read the FASTA sequence
+    
     with open(fasta_file, 'r') as fasta:
         sequence = fasta.read().strip()
+    if fasta_file is None and pdb_file is not None:
+    # Convert PDB to FASTA
+        project_dir = os.getenv("PROJECT_DIR")
+        fasta_dir = os.path.join(project_dir, output_dir)
+        pdb_name = os.path.splitext(os.path.basename(pdb_file))[0]
+        sequence = build_fasta_seq(pdb_name)
 
     if not covalent_docking:
 
@@ -198,17 +207,8 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
                             yaml.write("      binder: B\n")
     else:
        
-        with open(pdb_file, 'r') as pdb:
-            for line in pdb:
-                if line.startswith("LINK"):
-                    atom1_name = line[13:17].strip()
-                    atom2_name = line[43:47].strip()
+        prot_atom, res_name, res_idx, _, ccd, lig_atom, _ = get_link_atoms(pdb_file)
 
-                    res_idx = line[23:27].strip()
-                    res_name = line[17:21].strip()
-
-                    ccd = line[47:50].strip() 
-                    break 
         yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml")
         with open(yaml_file, 'w') as yaml:
             yaml.write("version: 1\n")
@@ -218,7 +218,7 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             yaml.write(f"      sequence: {sequence}\n")
             # yaml.write(f"      msa: {msa_file}\n")
             yaml.write(f"      modification:\n")
-            yaml.write(f"        - position: {res_idx}\n") 
+            yaml.write(f"        - position: {res_idx}\n") # fix res idx 
             yaml.write(f"          ccd: {res_name}\n")
 
             yaml.write("  - ligand:\n")
@@ -227,8 +227,8 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
             
             yaml.write("constraints:\n")
             yaml.write("    - bond:\n")
-            yaml.write(f"        atom1: [A, {res_idx}, {atom1_name}]\n")
-            yaml.write(f"        atom2: [LIG, 1, {atom2_name}]\n")
+            yaml.write(f"        atom1: [A, {res_idx}, {prot_atom}]\n") # fix res idx 
+            yaml.write(f"        atom2: [LIG, 1, {lig_atom}]\n") # lig atm idx needs to be 1 regardless of PDB idx 
 
             yaml.write("properties:\n")
             yaml.write("    - affinity:\n")

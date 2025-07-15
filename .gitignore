@@ -203,5 +203,7 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-scripts/test_rmsd.ipynb
 
+# ymanasa
+scripts/__pycache__
+scripts/test_rmsd.ipynb
