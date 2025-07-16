@@ -6,7 +6,7 @@ This script sets up Boltz job directories and generates `.yaml` files based on t
 
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-| `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information. Not required when covalent docking.               |
+| `--input_csv_file`     | `str`   | No      | Path to the input CSV file containing compound information. Not required when covalent docking.               |
 | `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
 | `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |

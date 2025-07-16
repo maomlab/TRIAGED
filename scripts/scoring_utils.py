@@ -13,7 +13,7 @@ import numpy   as np
 from scipy import stats
 from statsmodels.stats import weightstats as stests
 
-def convert_IC_to_energy(IC):
+def convert_IC_to_energy(IC: float) -> float:
     """
     Convert IC (IC50) to kcal/mol.
     :param IC: IC50.
@@ -21,7 +21,7 @@ def convert_IC_to_energy(IC):
     """
     return (6 - IC) * 1.364
 
-def read_boltz_predictions(predictions_dir):
+def read_boltz_predictions(predictions_dir: str) -> pd.DataFrame:
     """
     Reads prediction JSON files from subdirectories and compiles them into a pandas DataFrame.
     :param predictions_dir: Path to the directory containing subdirectories with JSON files.
@@ -115,7 +115,7 @@ def enrichment_standard(scores1, lig_list, decoy_list, metrics):
         fig.tight_layout(pad=2.0)
         fig.savefig(f"plot_{metrics}.png")
 
-def logAUC_from_dataframe(df, score_col, label_col):
+def logAUC_from_dataframe(df: pd.DataFrame, score_col: str, label_col: str) -> float:
     """
     Compute log AUC from a DataFrame containing scores, true positive labels, and compound names.
     taken from bootstrap_tldr.py 
@@ -164,7 +164,11 @@ def logAUC_from_dataframe(df, score_col, label_col):
     # Return adjusted log AUC
     return area / np.log10(LOGAUC_MAX / LOGAUC_MIN) - RANDOM_LOGAUC
 
-def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col='score', compound_col='compound_id', return_curves=False, bootstrap=False):
+def compute_vscreen_metrics(df_pos: pd.DataFrame, df_neg: pd.DataFrame, df_pred: pd.DataFrame,
+                            score_col: str='score',
+                            compound_col: str='compound_id',
+                            return_curves: bool=False,
+                            bootstrap: bool=False) -> dict[str, float | dict[str, float]] | tuple[dict[str, float | dict[str, float]], dict[str, tuple[np.ndarray, np.ndarray]]]:
     df_pos = df_pos.copy()
     df_neg = df_neg.copy()
     df_pos['label'] = 1

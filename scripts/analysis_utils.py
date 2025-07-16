@@ -9,11 +9,12 @@ matplotlib.use('Agg')
 import seaborn as sns # Making graphs 
 from plotnine import ggplot, aes, geom_histogram, geom_vline, annotate, theme_minimal, ggtitle
 
-import numpy   as np
+import numpy as np
 from scipy import stats
 from statsmodels.stats import weightstats as stests
+from typing import List, Dict, Optional, Tuple, Union
 
-def convert_IC_to_energy(IC):
+def convert_IC_to_energy(IC: float) -> float:
     """
     From README docs of boltz2:
     Convert IC (IC50) to kcal/mol.
@@ -22,7 +23,7 @@ def convert_IC_to_energy(IC):
     """
     return -(6 - IC) * 1.364
 
-def read_boltz_predictions(predictions_dir):
+def read_boltz_predictions(predictions_dir: str) -> pd.DataFrame:
     """
     Reads prediction JSON files from subdirectories and compiles them into a pandas DataFrame.
     :param predictions_dir: Path to the directory containing subdirectories with JSON files.
@@ -77,47 +78,47 @@ def read_boltz_predictions(predictions_dir):
     return pd.DataFrame(data)
 
 #from Bootstrap_TLDR
-def enrichment_standard(scores1, lig_list, decoy_list, metrics):
-        mols = scores1.keys()
-        ranked_list = [scores1[key] for key in mols]
-        ranked_list.sort(key=lambda x: float(x[-1]))
+def enrichment_standard(scores1: Dict[str, List[Union[str, float]]], lig_list: List[str], decoy_list: List[str], metrics: str) -> None:
+    mols = scores1.keys()
+    ranked_list = [scores1[key] for key in mols]
+    ranked_list.sort(key=lambda x: float(x[-1]))
 
-        points = do_roc(ranked_list, lig_list, decoy_list)
-        points = interpolate_curve(points)
-        auc    = AUC(points)*100
-        logauc = logAUC(points)*100
+    points = do_roc(ranked_list, lig_list, decoy_list)
+    points = interpolate_curve(points)
+    auc    = AUC(points)*100
+    logauc = logAUC(points)*100
 
-        fig = plt.figure(figsize=(5, 5))
-        fig.subplots_adjust(hspace=0.4, wspace=0.4)
-        sns.set_style("white")
-        sns.set_context("notebook", font_scale=1.0)
-        ax1 = fig.add_subplot(1, 1, 1)
+    fig = plt.figure(figsize=(5, 5))
+    fig.subplots_adjust(hspace=0.4, wspace=0.4)
+    sns.set_style("white")
+    sns.set_context("notebook", font_scale=1.0)
+    ax1 = fig.add_subplot(1, 1, 1)
 
-        x = np.arange(0,100,0.1)
-        if metrics == "AUC":
-                ax1.plot(x, x, 'k--')
-                ax1.axis([-0.25, 100, 0, 100])
-                ax1.set_xlabel(" Decoys Found %")
-                ax1.set_ylabel(" Ligands Found %")
-                x, y = zip(*points)
-                ax1.plot(x, y, linewidth=1.5, label='AUC: %.2f' % auc)
-                # ax1.plot(x, y, linewidth=1)
-                                
-        elif metrics == "logAUC":
-                ax1.semilogx(x, x, 'k--')
-                ax1.axis([0.1, 100, 0, 100])
-                ax1.set_xlabel(" Decoys Found %")
-                ax1.set_ylabel(" Ligands Found %")
-                x, y = zip(*points)
-                ax1.semilogx(x, y, linewidth=1.5, label='logAUC: %.2f' % logauc)
-                # ax1.semilogx(x, y, linewidth=1)
-        ax1.legend(loc="best")
+    x = np.arange(0,100,0.1)
+    if metrics == "AUC":
+            ax1.plot(x, x, 'k--')
+            ax1.axis([-0.25, 100, 0, 100])
+            ax1.set_xlabel(" Decoys Found %")
+            ax1.set_ylabel(" Ligands Found %")
+            x, y = zip(*points)
+            ax1.plot(x, y, linewidth=1.5, label='AUC: %.2f' % auc)
+            # ax1.plot(x, y, linewidth=1)
+                            
+    elif metrics == "logAUC":
+            ax1.semilogx(x, x, 'k--')
+            ax1.axis([0.1, 100, 0, 100])
+            ax1.set_xlabel(" Decoys Found %")
+            ax1.set_ylabel(" Ligands Found %")
+            x, y = zip(*points)
+            ax1.semilogx(x, y, linewidth=1.5, label='logAUC: %.2f' % logauc)
+            # ax1.semilogx(x, y, linewidth=1)
+    ax1.legend(loc="best")
 
-        fig.suptitle('ROC Plot')
-        fig.tight_layout(pad=2.0)
-        fig.savefig(f"plot_{metrics}.png")
+    fig.suptitle('ROC Plot')
+    fig.tight_layout(pad=2.0)
+    fig.savefig(f"plot_{metrics}.png")
 
-def logAUC_from_dataframe(df, score_col, label_col):
+def logAUC_from_dataframe(df: pd.DataFrame, score_col: str, label_col: str) -> float:
     """
     Compute log AUC from a DataFrame containing scores, true positive labels, and compound names.
     taken from bootstrap_tldr.py 
@@ -166,7 +167,16 @@ def logAUC_from_dataframe(df, score_col, label_col):
     # Return adjusted log AUC
     return area / np.log10(LOGAUC_MAX / LOGAUC_MIN) - RANDOM_LOGAUC
 
-def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col, output_dir, compound_col='compound_ID', return_curves=False, bootstrap=False):
+def compute_vscreen_metrics(
+    df_pos: pd.DataFrame, 
+    df_neg: pd.DataFrame, 
+    df_pred: pd.DataFrame, 
+    score_col: str, 
+    output_dir: str, 
+    compound_col: str = 'compound_ID', 
+    return_curves: bool = False, 
+    bootstrap: bool = False
+) -> Union[Dict[str, Union[float, Dict[str, float]]], Tuple[Dict[str, Union[float, Dict[str, float]]], Dict[str, Tuple[np.ndarray, np.ndarray]]]]:
     # Replace '/' in score_col with 'kcal' for output file names
     sanitized_score_col = score_col.replace('/', 'kcal') if score_col == 'kcal/mol' else score_col
 
@@ -296,4 +306,3 @@ def compute_vscreen_metrics(df_pos, df_neg, df_pred, score_col, output_dir, comp
         metrics['Score_Used'] = score_col  # Add score descriptor to bootstrap metrics
 
     return (metrics, curves) if return_curves else metrics
-

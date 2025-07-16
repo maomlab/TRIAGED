@@ -7,12 +7,13 @@ from fasta_utils import build_fasta_seq
 from mmseqs2 import run_mmseqs2
 import argparse
 from covalent_utils import get_link_atoms
+from typing import Union
 
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
 
-def check_smiles(smiles: str, verbose: bool = True):
+def check_smiles(smiles: str, verbose: bool = True) -> Union[str, None]:
     """
     Attempts to load and sanitize a SMILES string using RDKit.
     Returns a canonicalized SMILES string if successful, otherwise None.
@@ -50,8 +51,10 @@ def ensure_environment_variables():
         setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
         subprocess.run(f"source {setup_script}", shell=True, executable="/bin/bash", check=True)
         print("Environment variables set successfully.")
+    else:
+        print("Environment variables are already set. Continuing...")
 
-def sanitize_compound_id(compound_ID):
+def sanitize_compound_id(compound_ID: str) -> str:
     """
     Adjust the compound_ID to make it file-system friendly.
     Parameters:
@@ -76,7 +79,7 @@ def sanitize_compound_id(compound_ID):
     return sanitized_compound_id
 
 
-def parse_input_csv(csv_file):
+def parse_input_csv(csv_file: str) -> list[dict]:
     """
     Parse a CSV file with varying numbers of compound_ID, SMILES, and optional num columns.
     Also supports optional cofactor_ID_X, cofactor_sequence_X, and cofactor_num_X columns.
@@ -137,7 +140,7 @@ def parse_input_csv(csv_file):
     return parsed_data
 
 
-def generate_msa(project_dir, pdb_name, sequence):
+def generate_msa(project_dir: str, pdb_name: str, sequence: Union[str, list[str]]) -> None:
     """
     Generate a Multiple Sequence Alignment (MSA) using mmseqs2.
 
@@ -172,7 +175,7 @@ def generate_msa(project_dir, pdb_name, sequence):
         sys.exit(1)
 
 
-def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, covalent_docking=False, protein_nmers=1):
+def create_boltz_job(csv_file: str, pdb_file: str, fasta_file:str , output_dir: str, num_jobs: int, covalent_docking: bool=False, protein_nmers: int=1):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
     :param csv_file: Path to the input CSV file. Not required for covalent docking. 
@@ -193,7 +196,7 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
         os.makedirs(output_dir, exist_ok=True)
 
 
-    # Check if the PDB file exists
+    # Check if the PDB file exists script will default to a inputed FASTA file if not
     if pdb_file is not None:
         print(f"Input PDB file: {pdb_file}")
         print(f"generating FASTA file from PDB...")
@@ -236,6 +239,8 @@ def create_boltz_job(csv_file, pdb_file, fasta_file, output_dir, num_jobs, coval
         # Generate MSA using mmseqs2
         msa_dir = os.path.join(project_dir, "input_files/msa/")
         msa_file = os.path.join(msa_dir, f"{pdb_name}_mmseqs2.a3m")
+        
+        #
         generate_msa(project_dir, pdb_name, sequence)
         
 

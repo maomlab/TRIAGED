@@ -4,16 +4,10 @@ from Bio import SeqIO
 from io import StringIO
 import os
 import pandas as pd
+from fasta_utils import fetch_fasta_from_pdb as fetch_fasta
 
-def fetch_fasta(pdb_id):
-    """Fetch the FASTA sequences for all chains of a given PDB ID"""
-    url = f"https://www.rcsb.org/fasta/entry/{pdb_id}"
-    response = requests.get(url)
-    if response.status_code != 200:
-        print(f"Failed to fetch FASTA for {pdb_id}")
-    return response.text
 
-def fetch_smiles(pdb_id):
+def fetch_smiles(pdb_id: str) -> dict[str, str]:
     """Fetch SMILES strings of all ligands in the given PDB entry"""
     ligands_url = f"https://data.rcsb.org/rest/v1/core/entry/{pdb_id}"
     entry_data = requests.get(ligands_url).json()
@@ -31,11 +25,11 @@ def fetch_smiles(pdb_id):
         print(f"Error retrieving ligands for {pdb_id}: {e}")
     return smiles_dict
 
-def save_fasta_to_file(fasta_str, out_path):
+def save_fasta_to_file(fasta_str: str, out_path:str) -> None:
     with open(out_path, "w") as f:
         f.write(fasta_str)
 
-def save_smiles_to_file(smiles_dict, out_path):
+def save_smiles_to_file(smiles_dict:str, out_path:str) -> None:
     with open(out_path, "w") as f:
         for ligand_id, smiles in smiles_dict.items():
             f.write(f"{smiles}\t{ligand_id}\n")
