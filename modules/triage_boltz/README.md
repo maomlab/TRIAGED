@@ -1,112 +1,105 @@
 ### `setup_boltz_job.py`
 
-This script sets up Boltz job directories and generates `.yaml` files based on the input CSV and PDB files.
+This script sets up Boltz job directories and generates `.yaml` files based on the input CSV and biomolecular data. It supports both covalent and non-covalent docking workflows and handles complex systems with multiple biomolecules.
 
 #### Command-Line Arguments
 
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-| `--input_csv_file`     | `str`   | No      | Path to the input CSV file containing compound information. Not required when covalent docking.               |
-| `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
+| `--input_csv_file`     | `str`   | No       | Path to the input CSV file containing biomolecular entities. Required for non-covalent docking.               |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
-| `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |
-| `--num_jobs`           | `int`   | No       | How may parallel submission directories and slurm submit scripts to generate depending on avaliable gpus      |
-| `--protein_nmers`      | `int`   | No       | How many subunits to model the receptor if it is a multimer                                                   |
-| `--covalent_docking`   | `bool`  | No       | Whether ligand must covlanetly interact with protein.                                                         |
+| `--num_jobs`           | `int`   | No       | Number of parallel submission directories and SLURM scripts to generate. Default is 1.                        |
+| `--covalent_docking`   | `bool`  | No       | Whether ligand must covalently interact with the protein.                                                     |
+| `--name`               | `str`   | Yes      | Name of the receptor, used for naming SLURM scripts.                                                         |
 
 #### Example Usage
 
 For a simple virtual screen:
 ```bash
-python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory
-```
-optionally you can forgo the pdb file and just give the fasta file when using non-covelant docking:
-```bash
-python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_fasta_file /path/to/input.fasta --output_directory /path/to/output_directory
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --output_directory /path/to/output_directory --name receptor_name
 ```
 
-For a simple virtual screen on 4 gpus:
+For a virtual screen on 4 GPUs:
 ```bash
-python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4
+python setup_boltz_job.py --input_csv_file /path/to/input.csv --output_directory /path/to/output_directory --num_jobs 4 --name receptor_name
 ```
-For a virtual screen on a tetramer protein on 4 gpus:
+
+For covalent docking:
 ```bash
-python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory --num_jobs 4 --protein_nmers
+python setup_boltz_job.py --input_csv_file --output_directory /path/to/output_directory --covalent_docking --name receptor_name
 ```
-An example real life command:
-```bash
-python setup_boltz_job.py -i ../input_files/activity_data/kcnq_compounds.csv -f ../input_files/fastas/KCNQ2.fasta -o ../boltz_inputs/KCNQ2 -n 4 --protein_nmers 4
-```
+Note for covalent docking the input will be a csv with 
 
 #### Input CSV Requirements
 
 The input CSV file must contain the following columns:
-- `compound_id`: Unique identifier for the compound.
+- `compound_ID`: Unique identifier for the compound. the first compound_ID is what will be the binder.
 - `SMILES`: SMILES string representing the compound structure.
-For covalent ligand docking, do NOT use an input CSV. Only povide input pdb file and output directory paths. 
-Covalent docking by boltz is currently only supported for CCD ligands. 
+- `protein_ID`, `dna_ID`, `rna_ID`: Optional columns for specifying proteins, DNA, or RNA.
+- `num`: Optional column specifying the number of entities to model (default is 1).
 
-#### Advanced Modeling Features Branch 
-
-If you have the Advanced Modeling Features development branch there is now experimental support for setting up more complex Boltz simulations. The command line options for the script remain the same but you can now detail more complex systems via a csv file and setup_boltz_job.py will be able to handle it.
-
-For example, if you have a system where you want to dock a compound in a virtual screen and the target is known to also have interactions with 4 subunits of cholesterol, atp, and a modulating peptide, you can setup a virtual screen with all these additional biomolecules with the following format:
-
-#### Example CSV Format for Complex Systems
+Example CSV Format for Complex Systems
 
 Below is an example of how to format a CSV file for setting up a virtual screen with additional biomolecules (e.g., cholesterol, ATP, and peptides):
 
 ```csv
-compound_ID_1,num_1,SMILES_1,compound_ID_2,num_2,SMILES_2,compound_ID_3,SMILES_3,peptide_ID_1,peptide_sequence_1
-ZINC0001,1,CC(=O)Nc1ccc(C)cc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,ATP,C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)COP(=O)(O)OP(=O)(O)OP(=O)(O)O)O)O)N,peptide_1,ATCGATCGATCG
-ZINC0002,1,Cc1ccccc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,ATP,C1=NC(=C2C(=N1)N(C=N2)[C@H]3[C@@H]([C@@H]([C@H](O3)COP(=O)(O)OP(=O)(O)OP(=O)(O)O)O)O)N,peptide_2,ATCLLATCLL
+compound_ID_1,compound_num_1,SMILES_1,compound_ID_2,compound_num_2,SMILES_2,protein_ID_1,protein_sequence_1,protein_ID_2,protein_sequence_2,
+ZINC0001,1,CC(=O)Nc1ccc(C)cc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,test_receptor,APQQINDIVHRTITPLIEQQKIPGMAVAVIYQGKPYYFTWGYADIAKKQPVTQQTLFELGSVSKTFTGVLGGDAIARGEIKLSDPTTKYWPELTAKQWNGITLLHLATYTAGGLPLQVPDEVKSSSDLLRFYQNWQPAWAPGTQRLYANSSIGLFGALAVKPSGLSFEQAMQTRVFQPLKLNHTWINVPPAEEKNYAWGYREGKAVHVSPGALDAEAYGVKSTIEDMARWVQSNLKPLDINEKTLQQGIQLAQSRYWQTGDMYQGLGWEMLDWPVNPDSIINGSDNLAARPVKAITPPTPAVRASWVHKTGATGGFGSYVAFIPEKELGIVMLANKNYPNPARVDAAWQILNALQAPQQINDIVHRTITPLIEQQKIPGMAVAVIYQGKPYYFTWGYADIAKKQPVTQQTLFELGSVSKTFTGVLGGDAIARGEIKLSDPTTKYWPELTAKQWNGITLLHLATYTAGGLPLQVPDEVKSSSDLLRFYQNWQPAWAPGTQRLYANSSIGLFGALAVKPSGLSFEQAMQTRVFQPLKLNHTWINVPPAEEKNYAWGYREGKAVHVSPGALDAEAYGVKSTIEDMARWVQSNLKPLDINEKTLQQQGIQLAQSRYWQTGDMYQGLGWEMLDWPVNPDSIINGSDNKIALAARPVKAITPPTPAVRASWVHKTGATGGFGSYVAFIPEKELGIVMLANKNYPNPARVDAAWQILNALQ,ubiq,MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+ZINC0002,1,CC(=O)Nc1ccc(C)cc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,test_receptor,APQQINDIVHRTITPLIEQQKIPGMAVAVIYQGKPYYFTWGYADIAKKQPVTQQTLFELGSVSKTFTGVLGGDAIARGEIKLSDPTTKYWPELTAKQWNGITLLHLATYTAGGLPLQVPDEVKSSSDLLRFYQNWQPAWAPGTQRLYANSSIGLFGALAVKPSGLSFEQAMQTRVFQPLKLNHTWINVPPAEEKNYAWGYREGKAVHVSPGALDAEAYGVKSTIEDMARWVQSNLKPLDINEKTLQQGIQLAQSRYWQTGDMYQGLGWEMLDWPVNPDSIINGSDNLAARPVKAITPPTPAVRASWVHKTGATGGFGSYVAFIPEKELGIVMLANKNYPNPARVDAAWQILNALQAPQQINDIVHRTITPLIEQQKIPGMAVAVIYQGKPYYFTWGYADIAKKQPVTQQTLFELGSVSKTFTGVLGGDAIARGEIKLSDPTTKYWPELTAKQWNGITLLHLATYTAGGLPLQVPDEVKSSSDLLRFYQNWQPAWAPGTQRLYANSSIGLFGALAVKPSGLSFEQAMQTRVFQPLKLNHTWINVPPAEEKNYAWGYREGKAVHVSPGALDAEAYGVKSTIEDMARWVQSNLKPLDINEKTLQQQGIQLAQSRYWQTGDMYQGLGWEMLDWPVNPDSIINGSDNKIALAARPVKAITPPTPAVRASWVHKTGATGGFGSYVAFIPEKELGIVMLANKNYPNPARVDAAWQILNALQ,ubiq,MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
+ZINC0003,1,CC(=O)Nc1ccc(C)cc1,cholesterol,4,C[C@H](CCCC(C)C)[C@H]1CC[C@@H]2[C@@]1(CC[C@H]3[C@H]2CC=C4[C@@]3(CC[C@@H](C4)O)C)C,test_receptor,APQQINDIVHRTITPLIEQQKIPGMAVAVIYQGKPYYFTWGYADIAKKQPVTQQTLFELGSVSKTFTGVLGGDAIARGEIKLSDPTTKYWPELTAKQWNGITLLHLATYTAGGLPLQVPDEVKSSSDLLRFYQNWQPAWAPGTQRLYANSSIGLFGALAVKPSGLSFEQAMQTRVFQPLKLNHTWINVPPAEEKNYAWGYREGKAVHVSPGALDAEAYGVKSTIEDMARWVQSNLKPLDINEKTLQQGIQLAQSRYWQTGDMYQGLGWEMLDWPVNPDSIINGSDNLAARPVKAITPPTPAVRASWVHKTGATGGFGSYVAFIPEKELGIVMLANKNYPNPARVDAAWQILNALQAPQQINDIVHRTITPLIEQQKIPGMAVAVIYQGKPYYFTWGYADIAKKQPVTQQTLFELGSVSKTFTGVLGGDAIARGEIKLSDPTTKYWPELTAKQWNGITLLHLATYTAGGLPLQVPDEVKSSSDLLRFYQNWQPAWAPGTQRLYANSSIGLFGALAVKPSGLSFEQAMQTRVFQPLKLNHTWINVPPAEEKNYAWGYREGKAVHVSPGALDAEAYGVKSTIEDMARWVQSNLKPLDINEKTLQQQGIQLAQSRYWQTGDMYQGLGWEMLDWPVNPDSIINGSDNKIALAARPVKAITPPTPAVRASWVHKTGATGGFGSYVAFIPEKELGIVMLANKNYPNPARVDAAWQILNALQ,ubiq,MQIFVKTLTGKTITLEVEPSDTIENVKAKIQDKEGIPPDQQRLIFAGKQLEDGRTLSDYNIQKESTLHLVLRLRGG
 ```
 
-- **Columns**:
-   - `compound_ID_1`, `num_1`, `SMILES_1`: Information for the first compound. (compound name, number of x compound to dock, smiles)
-   - `compound_ID_2`, `num_2`, `SMILES_2`: Information for the second compound.
-   - `compound_ID_3`, `SMILES_3`: Information for the third compound.
-   - `peptide_ID_1`, `peptide_sequence_1`: Information for the peptide.
+Example Rows:
+Row 1: Includes ZINC0001 (compound 1), cholesterol (compound 2), test_receptor (protein 1) ubiquitin (protein 2)
+Row 2: Includes ZINC0002 (compound 1), cholesterol (compound 2), test_receptor (protein 1) ubiquitin (protein 2)
 
-note: the num_{X} is a optional column, if not provided it will default to 1...
+This format allows you to specify multiple compounds and proteins to be docked to complex systems in a single CSV file. The script will also generate the .yaml inputs in convient number parallel batch directories with associated slurm submit scripts with the use of the --num_jobs flag if you so desire. As of right now, the affinity will be only computed for the first compound i.e compound_ID_1 given, though by default confidence model scores will be generated for all biomolecules
 
-- **Example Rows**:
-   - Row 1: Includes `ZINC0001` (compound 1), cholesterol (compound 2), ATP (compound 3), and a peptide with sequence `ATCGATCGATCG`.
-   - Row 2: Includes `ZINC0002` (compound 1), cholesterol (compound 2), ATP (compound 3), and a peptide with sequence `ATCLLATCLL`.
+if you wish to do covalent docking, you must pass a csv file with the protein_ID and pdb_path columns like so:
+```csv
+protein_ID,pdb_path
+aa2a,/some/path
+a2ba,/some/path
+2web,/some/path
+```
 
-This format allows you to specify multiple compounds and peptides to be docked to complex systems in a single CSV file.
-The script will also generate the .yaml inputs in convient number parallel batch directories with associated slurm submit scripts with the use of the --num_jobs flag if you so desire. As of right now, the affinity will be only computed for the first compound i.e compound_ID_1 given, though by default confidence model scores will be generated for all biomolecules (updated analysis scripts is in my TODO list)
+#### Features
+
+- **CSV Parsing**: Reads input CSV files to create `TriageBiomolecule` objects for ligands, proteins, DNA, and RNA.
+- **FASTA Generation**: Automatically generates FASTA sequences from PDB files or fetches them using PDB IDs if missing.
+- **MSA Computation**: Computes single and paired MSAs for proteins and creates combined MSAs.
+- **YAML File Generation**: Creates YAML configuration files for Boltz, including sequences, MSAs, and properties.
+- **Covalent Docking Support**: Processes PDB files to extract covalent interaction details for ligand-protein docking.
+- **Parallel Job Setup**: Splits input data into chunks for parallel job execution.
 
 #### Output
+
 For non-covalent docking:
-- `.a3m` MSA files are pregenerated using the mmseqs2 server, you do not need to have --use-msa-server flag in boltz
+- `.a3m` MSA files are pregenerated using the mmseqs2 server.
 - `.yaml` files are created in the specified output directory, one for each compound in the CSV file.
+
+For covalent docking:
+- `.yaml` files are created in the specified output directory.
 - The protein sequence is extracted from the PDB file and included in the `.yaml` files.
+- Covalent bond information is automatically extracted and included in the `.yaml` files.
 
-For covalent docking: 
-You MUST use the --use-msa-server flag when running boltz for covalent docking. 
-- `.yaml` files are created in the specified output directory
-- The protein sequence is extracted from the PDB file and included in the `.yaml` files.
-- The atoms involved the covalent bonds between ligand and covalent residue are found and included in the `.yaml` files. User input to indicate position of the bond is not required.
----
+#### SLURM Scripts
 
-### SLURM scripts
+The script automatically generates SLURM batch scripts for running Boltz jobs on a high-performance computing cluster. These scripts are saved in `{PROJECT_DIR}/slurm_scripts`.
 
-The script will automatically generate SLURM batch scripts for running Boltz jobs on a high-performance computing cluster with the pathing and inputs for boltz already set 
-to the generated input directories. By default these scripts will be generated in {Project_dir}/slurm_scripts
-
-#### Example Usage
+#### Example SLURM Script Usage
 
 ```bash
 sbatch slurm_run_boltz.sh
 ```
 
+#### Notes
+
+- Ensure the `PROJECT_DIR` environment variable is set before running the script.
+- Input CSV files must follow the expected format, with columns for `compound_ID`, `protein_ID`, `dna_ID`, `rna_ID`, and their associated properties.
+- For covalent docking, only PDB files are required, and the `--use-msa-server` flag must be used when running Boltz.
+
 ---
-
-## Future Features: aka work in progress
-
-- generate_boltz_constrains: a method to automatically generate constraints to condition diffusion towards specific protein active states based on two input pdbs.
-
 
 # Analyze Boltz Predictions
 
