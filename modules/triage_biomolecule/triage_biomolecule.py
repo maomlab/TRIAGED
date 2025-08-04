@@ -24,6 +24,7 @@ class TriageBiomolecule:
     msa_path: Optional[str] = None
     pair_msa_path: Optional[str] = None
     combined_msa_path: Optional[str] = None
+    pose_path: Optional[str] = None
 
     #dont delete these fields, they are used in the future finetuing modules.
     #coordinates: Optional[torch.Tensor] = field(default=None)
@@ -238,6 +239,7 @@ class TriageBiomolecule:
                                 smiles=entry.get("SMILES"),
                                 inchi=entry.get("InChI"),
                                 num=int(entry.get("compound_num"))
+                                pose_path=entry.get("pose_path"),
                             )
                         )
                     elif "protein_ID" in entry:

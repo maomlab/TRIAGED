@@ -119,6 +119,7 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                         dna_num_key = f"dna_num{suffix}"
                         rna_sequence_key = f"rna_sequence{suffix}"
                         rna_num_key = f"rna_num{suffix}"
+                        pose_path_key = f"pose_path{suffix}"
                     else:
                         smiles_key = "SMILES"  
                         num_key = "compound_num"  
@@ -132,6 +133,7 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                         dna_num_key = "dna_num"
                         rna_sequence_key = "rna_sequence"
                         rna_num_key = "rna_num"
+                        pose_path_key = "pose_path"
                     
                     if key.startswith("compound_ID") and row[key]:
                         if smiles_key in row and row[smiles_key]:
@@ -139,7 +141,8 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "compound_ID": row[key].strip(),
                                 "SMILES": row[smiles_key].strip(),
                                 "compound_num": row[num_key].strip() if num_key in row and row[num_key] else "1",
-                                "inchi": row[inchi_key].strip() if inchi_key in row and row[inchi_key] else None
+                                "inchi": row[inchi_key].strip() if inchi_key in row and row[inchi_key] else None,
+                                "pose_path": row[pose_path_key].strip() if pose_path_key in row and row[pose_path_key] else None
                             }
                         compound_data.append(compound_entry)
                     if key.startswith("protein_ID") and row[key]:    
