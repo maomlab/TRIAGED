@@ -30,6 +30,11 @@ class TriageBiomolecule:
     #coordinates: Optional[torch.Tensor] = field(default=None)
     #mask: Optional[torch.Tensor] = field(default=None)
 
+    # add class variables for boltz affinity- to be connected in the pipline
+    #
+    #
+
+    # add class variables for clustering to be connected in the pipline.
     def __post_init__(self):
         """
         Validate the inputs after initialization.
