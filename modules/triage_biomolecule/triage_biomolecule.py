@@ -243,7 +243,7 @@ class TriageBiomolecule:
                                 entity_type="ligand",
                                 smiles=entry.get("SMILES"),
                                 inchi=entry.get("InChI"),
-                                num=int(entry.get("compound_num"))
+                                num=int(entry.get("compound_num")),
                                 pose_path=entry.get("pose_path"),
                             )
                         )
