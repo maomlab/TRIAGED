@@ -37,7 +37,7 @@ def diversity_analysis_clustering(bitvecs, n_clusters=10):
     return labels
 
 def hit_expansion_clustering(countvecs):
-    reducer = umap.UMAP(metric="euclidean", random_state=42)
+    reducer = umap.UMAP(metric="euclidean")
     embedding = reducer.fit_transform(countvecs)
     clusterer = hdbscan.HDBSCAN(min_cluster_size=5)
     labels = clusterer.fit_predict(embedding)

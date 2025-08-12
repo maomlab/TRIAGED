@@ -28,6 +28,8 @@ def get_ecfp_from_biomolecule(ligand: TriageBiomolecule, fingerprint_type: str =
         fp = AllChem.GetMorganFingerprintAsBitVect(mol, nBits=2048, radius=2)
     elif fingerprint_type == "ecfp6":
         fp = AllChem.GetMorganFingerprintAsBitVect(mol, nBits=2048, radius=3)
+    
+    ligand.ecfp = fp
     return fp 
 
 def get_plif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomolecule, fingerprint_type: str = "plif"):
@@ -44,7 +46,7 @@ def get_plif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomole
     # Placeholder for actual PLIF calculation logic
     return None  # Replace with actual PLIF calculation result
 
-def get_prolif_from_biomolecule(ligands: list[TriageBiomolecule], receptor: TriageBiomolecule, format="bit", interactions="all"):
+def get_prolif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomolecule, format="bitvectors", interactions="all"):
     """
     Generate a ProLIF interaction fingerprint DataFrame for multiple docking poses.
     
@@ -87,16 +89,14 @@ def get_prolif_from_biomolecule(ligands: list[TriageBiomolecule], receptor: Tria
         fp = prolif.Fingerprint(interactions)
     
     # Gather ligands from the TriageBiomolecule objects
-    ligands_molecules = []
-    for ligand in ligands:
-        
-        for ligand_pose in mol2_supplier(ligand.pose_path):
-            if ligand_pose is None:
-                raise ValueError(f"Invalid pose in {ligand.pose_path}")
-            ligands_molecules.append(ligand_pose)
+    ligand_poses = []
+    for ligand_pose in mol2_supplier(ligand.pose_path):
+        if ligand_pose is None:
+            raise ValueError(f"Invalid pose in {ligand.pose_path}")
+        ligand_poses.append(ligand_pose)
 
     # Compute the fingerprints for all ligand poses against the receptor
-    fp.run_from_iterable(ligands_molecules, receptor_molecule)
+    fp.run_from_iterable(ligand_poses, receptor_molecule)
     
     # Convert to a DataFrame. The count flag controls whether a count or bit fingerprint is returned.
         # Get appropriate output format
@@ -110,10 +110,6 @@ def get_prolif_from_biomolecule(ligands: list[TriageBiomolecule], receptor: Tria
         return to_countvectors(df)
     else:
         raise ValueError(f"Unknown format: {format}. Use 'dataframe', 'bitvectors', or 'countvectors'.")
-    
-    # The DataFrame index is the pose number; reset to ensure a clean integer index
-    df = df.reset_index(drop=True)
-
-    return df
+ 
 
     

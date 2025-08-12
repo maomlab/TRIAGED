@@ -26,15 +26,17 @@ class TriageBiomolecule:
     combined_msa_path: Optional[str] = None
     pose_path: Optional[str] = None
 
-    #dont delete these fields, they are used in the future finetuing modules.
-    #coordinates: Optional[torch.Tensor] = field(default=None)
-    #mask: Optional[torch.Tensor] = field(default=None)
+    #fingerprints: 
+    ecfp: Optional[torch.Tensor] = None # ECFP fingerprint
+    prolif_count: Optional[torch.Tensor] = None # ProLIF count vector
+    prolif_bit: Optional[torch.Tensor] = None # ProLIF bit vector
 
     # add class variables for boltz affinity- to be connected in the pipline
     #
     #
 
     # add class variables for clustering to be connected in the pipline.
+
     def __post_init__(self):
         """
         Validate the inputs after initialization.
