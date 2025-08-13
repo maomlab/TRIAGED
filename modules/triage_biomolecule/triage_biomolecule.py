@@ -4,7 +4,7 @@ import os
 from rdkit import Chem
 from triage_boltz.misc_utils import parse_input_csv, generate_msa, sanitize_compound_id, check_smiles
 import torch
-
+import numpy as np
 from triage_boltz.pdb_to_fasta import pdb_to_fasta
 from triage_boltz.fasta_utils import build_fasta_seq
 @dataclass
@@ -27,9 +27,9 @@ class TriageBiomolecule:
     pose_path: Optional[str] = None
 
     #fingerprints: 
-    ecfp: Optional[torch.Tensor] = None # ECFP fingerprint
-    prolif_count: Optional[torch.Tensor] = None # ProLIF count vector
-    prolif_bit: Optional[torch.Tensor] = None # ProLIF bit vector
+    ecfp: Optional[np.ndarray] = None  # ECFP fingerprint
+    prolif_count: Optional[np.ndarray] = None # ProLIF count vector
+    prolif_bit: Optional[np.ndarray] = None # ProLIF bit vector
 
     # add class variables for boltz affinity- to be connected in the pipline
     #
@@ -218,6 +218,23 @@ class TriageBiomolecule:
         if not fasta_sequence:
             raise ValueError(f"Failed to fetch FASTA sequence for PDB ID {self.entity_id}.")
         self.sequence = fasta_sequence
+
+    def store_fingerprint(self, fingerprint: torch.Tensor, fingerprint_type: str) -> None:
+        """
+        Store a fingerprint in the appropriate class variable based on the fingerprint type.
+
+        Parameters:
+        - fingerprint_type (str): The type of fingerprint ('ecfp', 'prolif_count', 'prolif_bit').
+        - fingerprint (torch.Tensor): The fingerprint data to store.
+        """
+        if fingerprint_type == "ecfp":
+            self.ecfp = fingerprint
+        elif fingerprint_type == "prolif_count":
+            self.prolif_count = fingerprint
+        elif fingerprint_type == "prolif_bit":
+            self.prolif_bit = fingerprint
+        else:
+            raise ValueError(f"Unsupported fingerprint type: {fingerprint_type}")
 
     @staticmethod
     def from_csv(csv_file: str) -> list[list['TriageBiomolecule']]:
