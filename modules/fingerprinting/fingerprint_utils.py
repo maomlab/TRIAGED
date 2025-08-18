@@ -115,7 +115,7 @@ def get_prolif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomo
     else:
         raise ValueError(f"Unknown format: {format}. Use 'dataframe', 'bitvectors', or 'countvectors'.")
  
-
+#creates fingerprints
 def create_fingerprint_dataframe(ligands: list, receptor: TriageBiomolecule,
                                   fingerprint_type: str = "prolif",
                                   format="bitvectors",
@@ -173,6 +173,7 @@ def create_fingerprint_dataframe(ligands: list, receptor: TriageBiomolecule,
     fingerprint_df = pd.DataFrame(fingerprint_list, index=ligand_ids)
     return fingerprint_df
 
+#pushes calculations back to the biomolecule object chain
 def store_fingerprints_from_df(fingerprint_df: pd.DataFrame, 
                                biomolecules: list[TriageBiomolecule], 
                                fingerprint_type: str = "ecfp4") -> None:
@@ -192,11 +193,31 @@ def store_fingerprints_from_df(fingerprint_df: pd.DataFrame,
     -----
     The DataFrame index should match the entity IDs of the biomolecule ligands.
     """
-    if biomolecule.entity_type != "ligand":
-        raise ValueError("Only Ligand entity types can store fingerprints")
-    
+
     for fingerprint_df_id in fingerprint_df.index:
         for ligand in biomolecules:
             if ligand.entity_id == fingerprint_df_id:
                 ligand.store_fingerprint(fingerprint_df.loc[fingerprint_df_id].values, fingerprint_type)
                 break
+
+def stitcher_calculate_fingerprints(biomolecules: list[TriageBiomolecule], receptor: TriageBiomolecule, fingerprint_type: str) -> None:
+    """
+    Calculate and store fingerprints for a list of TriageBiomolecule objects.
+    
+    Parameters
+    ----------
+    biomolecules : list of TriageBiomolecule
+        List of TriageBiomolecule objects representing ligands.
+    fingerprint_type : str
+        Type of fingerprint to calculate: 'ecfp4', 'ecfp6', or 'prolif'.
+    
+    Notes
+    -----
+    This function calculates fingerprints for each biomolecule and stores them in the biomolecule object.
+    """
+    
+    if not receptor:
+        raise ValueError("No receptor found in the provided biomolecules.")
+    
+    fingerprint_df = create_fingerprint_dataframe(biomolecules, receptor, fingerprint_type=fingerprint_type)
+    store_fingerprints_from_df(fingerprint_df, biomolecules, fingerprint_type=fingerprint_type)

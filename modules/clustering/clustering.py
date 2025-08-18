@@ -24,7 +24,7 @@ def tanimoto_distance_matrix(fps):
             dist_matrix[i, j] = dist_matrix[j, i] = dist
     return dist_matrix
 
-def lead_discovery_clustering(bitvecs, n_clusters=5):
+def lead_discovery_clustering(bitvecs, n_clusters=10):
     dist_matrix = tanimoto_distance_matrix(bitvecs)
     model = AgglomerativeClustering(n_clusters=n_clusters, affinity="precomputed", linkage="average")
     labels = model.fit_predict(dist_matrix)
@@ -42,3 +42,4 @@ def hit_expansion_clustering(countvecs):
     clusterer = hdbscan.HDBSCAN(min_cluster_size=5)
     labels = clusterer.fit_predict(embedding)
     return embedding, labels
+

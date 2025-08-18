@@ -14,6 +14,8 @@ from scipy import stats
 from statsmodels.stats import weightstats as stests
 from typing import List, Dict, Optional, Tuple, Union
 
+def combine_boltz_predictions():
+
 def convert_IC_to_energy(IC: float) -> float:
     """
     From README docs of boltz2:
