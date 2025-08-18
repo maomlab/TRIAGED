@@ -108,6 +108,26 @@ def get_residue_index_from_pdb(res_num, chain_id, pdb_file):
     except ValueError:
         return None
 
+def ccd_is_ligand(ccd):
+    """
+    Returns True if the CCD parsed is a ligand object and not a solvent, ion or amino acid
+    """   
+
+    standard_aa = PDB.Polypeptide.standard_aa_names
+
+    standard_pdb_solvents = [
+        "HOH", "DOD", "H2O", "ETH", "EOH", "IPA", "MPD", "DMS",
+        "ACT", "ACE", "GOL", "PEG", "SO4", "PO4", "TRS", "MES",
+        "HEP", "FMT", "TLA", "EDO"
+        ]
+
+    standard_pdb_ions = [
+            "NA", "K", "CL", "CA", "MG", "ZN", "FE", "FE2", "FE3",
+            "MN", "CO", "CU", "NI", "CD", "SR", "BA", "BR", "IOD",
+            "CS", "RB", "FE2", "FE3"
+        ]
+    if ccd not in standard_pdb_solvents and ccd not in standard_pdb_ions and ccd not in standard_aa:
+        return True
     
 def get_link_atoms(parent_file):
     """
@@ -128,36 +148,38 @@ def get_link_atoms(parent_file):
             ccd (str): Three-letter chemical component ID of the ligand (e.g., "7KH").
             lig_idx (int): Residue number (HETATM resSeq) of the ligand (e.g., 301).
     """
-    standard_aa = PDB.Polypeptide.standard_aa_names
-    standard_pdb_solvents = [
-        "HOH", "DOD", "H2O", "ETH", "EOH", "IPA", "MPD", "DMS",
-        "ACT", "ACE", "GOL", "PEG", "SO4", "PO4", "TRS", "MES",
-        "HEP", "FMT", "TLA", "EDO"
-        ]
-
-    standard_pdb_ions = [
-            "NA", "K", "CL", "CA", "MG", "ZN", "FE", "FE2", "FE3",
-            "MN", "CO", "CU", "NI", "CD", "SR", "BA", "BR", "IOD",
-            "CS", "RB"
-        ]
-    
+    import ipdb; ipdb.set_trace()
     with open(parent_file, 'r') as pdb:
         for line in pdb:
-            if line.startswith("LINK"): # not enough; there's other LINK lines for metals and disulfide bonds 
+            if line.startswith("LINK"): # look at all LINK lines until we find cov ligand line 
                 ccd = line[47:51].strip() 
-                if ccd not in standard_pdb_solvents and ccd not in standard_pdb_ions and ccd not in standard_aa:
-                    # print(f"Covalent ligand found: {ccd}")
+                if ccd_is_ligand(ccd): 
                     prot_atom = line[13:17].strip()
                     res_name = line[17:21].strip() 
                     chain_name = line[21:23].strip() 
 
                     res_idx = int(line[23:27].strip()) # incorrect due to indexing by PDB
-                    res_num = get_residue_index_from_pdb(res_idx, chain_name, parent_file) # resorts to 
+                    res_num = get_residue_index_from_pdb(res_idx, chain_name, parent_file) # resort to using this instead of res_idx
 
                     lig_atom = line[43:47].strip() 
                     lig_idx = int(line[22:26].strip()) 
-                    return prot_atom, res_name, res_num, chain_name, ccd, lig_atom, lig_idx             
-    raise ValueError("LINK record not present or no valid ligand found in PDB")
+                    return prot_atom, res_name, res_num, chain_name, ccd, lig_atom, lig_idx
+                else: # ccd detected was a solvent, ion or aa
+                    # try getting info using alternate pdb format where ccd comes before covalent residue columns in LINK record
+                    ccd = line[17:21].strip()
+                    if ccd_is_ligand(ccd):
+                        prot_atom = line[43:47].strip()
+                        res_name = line[47:51].strip() 
+                        chain_name = line[51:53].strip() 
+
+                        res_idx = line[53:57].strip()
+                        res_num = get_residue_index_from_pdb(res_idx, chain_name, parent_file)
+
+                        lig_atom = line[12:16].strip()
+                        lig_idx = line[23:27].strip()
+                        return prot_atom, res_name, res_num, chain_name, ccd, lig_atom, lig_idx
+    print(f"Warning: LINK record not present or no valid ligand found in PDB, {parent_file}")
+    return None
 
 def combine_lig_prot(protein, ligand):
     """
@@ -305,3 +327,6 @@ def get_dihedral(combined, conf, atomB_idx, atomC_idx):
     
     #dihedral
     return rdMolTransforms.GetDihedralDeg(conf, atom_A_idx, atomB_idx, atomC_idx, atom_D_idx)
+
+# testing
+get_link_atoms("/home/ymanasa/turbo/ymanasa/opt/boltz/covalent_testing/4EBP/4EBP.pdb")

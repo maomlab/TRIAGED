@@ -53,8 +53,7 @@ def ensure_environment_variables():
         # print("Environment variable PROJECT_DIR is not set. Running setup_enviorment.sh...")
         setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
         subprocess.run(f"source {setup_script}", shell=True, executable="/bin/bash", check=True)
-        print("Environment variables set successfully.")
-
+        # print("Environment variables set successfully.")
 
 def create_boltz_job(pdb_file, output_dir, csv_file=None, covalent_docking=False):
     """
@@ -131,34 +130,37 @@ def create_boltz_job(pdb_file, output_dir, csv_file=None, covalent_docking=False
                     yaml.write("  - affinity:\n")
                     yaml.write("      binder: B\n")
     else:
-       
-        prot_atom, res_name, res_idx, _, ccd, lig_atom, _ = get_link_atoms(pdb_file)
+        if (result := get_link_atoms(pdb_file)) is not None: #unpack iterable if not NoneType object
+            prot_atom, res_name, res_idx, _, ccd, lig_atom, _ = get_link_atoms(pdb_file)
+        
+            yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml")
+            if not os.path.exists(yaml_file):
+                with open(yaml_file, 'w') as yaml:
+                    yaml.write("version: 1\n")
+                    yaml.write("sequences:\n")
+                    yaml.write("  - protein:\n")
+                    yaml.write("      id: A\n")
+                    yaml.write(f"      sequence: {sequence}\n")
+                    # yaml.write(f"      msa: {msa_file}\n")
+                    yaml.write(f"      modification:\n")
+                    yaml.write(f"        - position: {res_idx}\n")
+                    yaml.write(f"          ccd: {res_name}\n")
 
-        yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml")
-        with open(yaml_file, 'w') as yaml:
-            yaml.write("version: 1\n")
-            yaml.write("sequences:\n")
-            yaml.write("  - protein:\n")
-            yaml.write("      id: A\n")
-            yaml.write(f"      sequence: {sequence}\n")
-            # yaml.write(f"      msa: {msa_file}\n")
-            yaml.write(f"      modification:\n")
-            yaml.write(f"        - position: {res_idx}\n") # fix res idx 
-            yaml.write(f"          ccd: {res_name}\n")
+                    yaml.write("  - ligand:\n")
+                    yaml.write(f"      id: LIG\n")
+                    yaml.write(f"      ccd: '{ccd}'\n")
+                    
+                    yaml.write("constraints:\n")
+                    yaml.write("    - bond:\n")
+                    yaml.write(f"        atom1: [A, {res_idx}, {prot_atom}]\n") 
+                    yaml.write(f"        atom2: [LIG, 1, {lig_atom}]\n") # lig atm idx needs to be 1 regardless of PDB idx 
 
-            yaml.write("  - ligand:\n")
-            yaml.write(f"      id: LIG\n")
-            yaml.write(f"      ccd: '{ccd}'\n")
-            
-            yaml.write("constraints:\n")
-            yaml.write("    - bond:\n")
-            yaml.write(f"        atom1: [A, {res_idx}, {prot_atom}]\n") # fix res idx 
-            yaml.write(f"        atom2: [LIG, 1, {lig_atom}]\n") # lig atm idx needs to be 1 regardless of PDB idx 
-
-            yaml.write("properties:\n")
-            yaml.write("    - affinity:\n")
-            yaml.write(f"        binder: LIG\n")
-    print(f"YAML files created successfully: {yaml_file}.")
+                    yaml.write("properties:\n")
+                    yaml.write("    - affinity:\n")
+                    yaml.write(f"        binder: LIG\n")
+        else: # if get_link_atom is None 
+            yaml_file = None # returns None
+    return yaml_file # path to yaml file 
 
 def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files.")
@@ -171,7 +173,7 @@ def main():
     if not args.covalent_docking and args.input_csv_file is None:
         parser.error("--input_csv_file is required when --covalent_docking is False for non-covalent docking")
 
-    create_boltz_job(args.input_csv_file, args.input_pdb_file, args.output_directory, args.covalent_docking)
+    create_boltz_job(csv_file=args.input_csv_file, pdb_file=args.input_pdb_file, output_dir=args.output_directory, covalent_docking=args.covalent_docking)
 
 if __name__ == "__main__":
     main()
