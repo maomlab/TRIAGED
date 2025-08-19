@@ -7,6 +7,9 @@ import torch
 import numpy as np
 from triage_boltz.pdb_to_fasta import pdb_to_fasta
 from triage_boltz.fasta_utils import build_fasta_seq
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 @dataclass
 class TriageBiomolecule:
     """
@@ -43,8 +46,8 @@ class TriageBiomolecule:
         """
         #if self.coordinates is not None and not isinstance(self.coordinates, torch.Tensor):
         #    raise TypeError("Coordinates must be a torch.Tensor.")
-        if self.smiles is None and self.sequence is None and self.pdb_path is None and self.inchi is None:
-            raise ValueError("At least one of 'smiles', 'sequence', 'pdb_path', or 'inchi' must be provided.")
+        if self.smiles is None and self.sequence is None and self.pdb_path is None and self.inchi  and self.pose_path is None:
+            raise ValueError("At least one of 'smiles', 'sequence', 'pdb_path', 'pose_path', or 'inchi' must be provided.")
         if self.entity_type == "ligand":
             self.sanitize_entity_id()
             if self.smiles:
@@ -305,3 +308,28 @@ class TriageBiomolecule:
                 biomolecules.append(row_biomolecules)
 
         return biomolecules
+
+    @staticmethod
+    def to_parquet(biomolecules: list['TriageBiomolecule'], parquet_path: str) -> None:
+        """
+        Export a list of TriageBiomolecule objects to a parquet file, with each attribute as a column.
+
+        Parameters:
+        - biomolecules (list[TriageBiomolecule]): List of TriageBiomolecule objects.
+        - parquet_path (str): Output path for the parquet file.
+        """
+        # Convert dataclass objects to dicts
+        dicts = []
+        for obj in biomolecules:
+            d = obj.__dict__.copy()
+            # Convert numpy arrays and torch tensors to lists for serialization
+            for k, v in d.items():
+                if isinstance(v, np.ndarray):
+                    d[k] = v.tolist()
+                elif isinstance(v, torch.Tensor):
+                    d[k] = v.cpu().numpy().tolist()
+            dicts.append(d)
+        df = pd.DataFrame(dicts)
+        table = pa.Table.from_pandas(df)
+        pq.write_table(table, parquet_path)
+
