@@ -221,3 +221,49 @@ def generate_msa(entity_name: str, sequence: Union[str, list[str]]) -> str:
         sys.exit(1)
     msa_file_path = msa_file
     return msa_file_path
+
+def clean_dos_chars(input_file: str, output_file: str = None) -> dict:
+    """
+    Detect and clean DOS/Windows-specific characters from a text file.
+
+    Parameters
+    ----------
+    input_file : str
+        Path to the input file (.csv or .txt).
+    output_file : str, optional
+        Path to the cleaned output file. If None, overwrites input_file.
+
+    Returns
+    -------
+    dict
+        A dictionary summarizing findings:
+        {
+            "had_bom": bool,
+            "had_crlf": bool,
+            "had_cr": bool,
+            "output_file": str
+        }
+    """
+    with open(input_file, "rb") as f:
+        raw = f.read()
+
+    findings = {
+        "had_bom": raw.startswith(b"\xef\xbb\xbf"),
+        "had_crlf": b"\r\n" in raw,
+        "had_cr": b"\r" in raw and b"\r\n" not in raw,  # stray Mac-style CR
+        "output_file": None
+    }
+
+    # Normalize: remove BOM, convert CRLF -> LF, CR -> LF
+    text = raw.decode("utf-8-sig", errors="replace")  # removes BOM if present
+    text = text.replace("\r\n", "\n")  # DOS to Unix
+    text = text.replace("\r", "\n")   # old Mac to Unix
+
+    if output_file is None:
+        output_file = input_file
+
+    with open(output_file, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+    findings["output_file"] = os.path.abspath(output_file)
+    return findings
