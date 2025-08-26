@@ -66,12 +66,15 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                 first_ligand = None
                 first_protein = None
                 for entry in row:
+                    #print(f"entry: {entry.entity_id}")
                     if first_ligand is None and entry.entity_type == "ligand":
                         first_ligand = entry
                     if first_protein is None and entry.entity_type == "protein":
                         first_protein = entry
                     if first_ligand and first_protein:
                         break
+        
+                #print(f"DEBUG: {first_ligand}, {first_protein}")
                 yaml_file = os.path.join(job_dir, f"{first_ligand.entity_id}.yaml")
                 
                 with open(yaml_file, 'w') as yaml:
@@ -248,7 +251,8 @@ def main():
     ensure_environment_variables()
     project_dir = os.getenv("PROJECT_DIR")
 
-    
+    #now checking integretiy of the input csv file
+    clean_dos_chars(args.input_csv_file)
     create_boltz_job(args.input_csv_file, args.output_directory, args.num_jobs, args.covalent_docking)
     # Create SLURM submit script
     
