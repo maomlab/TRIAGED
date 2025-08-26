@@ -1,7 +1,7 @@
 import os
 import csv
 import requests
-from covalent_utils import get_link_atoms
+from triage_boltz.covalent_utils import get_link_atoms
 
 def fetch_fasta_from_pdb(pdb_id: str) -> str:
     """

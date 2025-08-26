@@ -1,4 +1,4 @@
-from modules.misc_utils.graphics_utilis import make_banner
+from misc_utils.graphics_utilis import make_banner
 
 def main():
     banner, banner_foot = make_banner()

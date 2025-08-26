@@ -60,7 +60,6 @@ def is_small_molecule(res: Residue) -> bool:
 
 # --- RDKit helpers (distance-based bonding)
 PT = Chem.GetPeriodicTable()
-COV_RADII = {1:0.31,6:0.76,7:0.71,8:0.66,9:0.57,15:1.07,16:1.05,17:1.02,35:1.20,53:1.39}
 METALS = {"Na","K","Mg","Ca","Mn","Fe","Co","Ni","Cu","Zn","Cd","Ag","Sr","Cs","Ba","Al","Ga","In","Au","Hg","Pb"}
 
 def infer_element(atom_name: str, element_field: Optional[str]) -> str:

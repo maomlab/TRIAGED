@@ -2,7 +2,9 @@
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from fingerprinting.mmcif_utils import extract_protein_receptor, extract_ligands_to_sdf, extract_ligand
 from triage_biomolecule.triage_biomolecule import TriageBiomolecule
+from misc_utils.split_mmcif import split_mmcif
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit import DataStructs
@@ -25,19 +27,12 @@ from rdkit.Chem.rdmolfiles import SDWriter
 from rdkit.Chem import rdDetermineBonds
 
 
-# Try to import Biopython for mmCIF parsing; fall back to pybel/openbabel if needed
-_HAS_BIOPY = True
-try:
-    from Bio.PDB import MMCIFParser, PDBIO, Select
-except Exception:
-    _HAS_BIOPY = False
+from Bio.PDB import MMCIFParser, PDBIO, Select
 
-_HAS_PYBEL = True
-try:
-    from openbabel import openbabel
-    import pybel
-except Exception:
-    _HAS_PYBEL = False
+
+from prolif.molecule import sdf_supplier
+from openbabel import pybel
+import subprocess
 
 def get_ecfp_from_biomolecule(ligand: TriageBiomolecule, fingerprint_type: str = "ecfp4") -> DataStructs.ExplicitBitVect:
     """
@@ -78,7 +73,7 @@ def get_plif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomole
     pass
 
 def get_prolif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomolecule,
-                                 format="bitvectors", interactions="all") -> pd.DataFrame:
+                                 format="countvectors", interactions="all") -> pd.DataFrame:
     """
     Generate a ProLIF interaction fingerprint DataFrame for multiple docking poses.
     
@@ -108,9 +103,9 @@ def get_prolif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomo
     Each TriageBiomolecule ligand can contain multiple poses; all are processed.
     """
     # Load the receptor PDB into an RDKit Mol with residue information
-    rec_rdkit = Chem.MolFromPDBFile(receptor.pdb_path, removeHs=False, sanitize=False)
+    rec_rdkit = Chem.MolFromPDBFile(ligand.paired_receptor_path, removeHs=False, sanitize=False)
     if rec_rdkit is None:
-        raise ValueError(f"Could not read PDB file at {receptor.pdb_path}")
+        raise ValueError(f"Could not read PDB file at {ligand.paired_receptor_path}")
     # Wrap as a ProLIF Molecule; residue info from the PDB is kept by default
     receptor_molecule = Molecule.from_rdkit(rec_rdkit)
     
@@ -119,21 +114,23 @@ def get_prolif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomo
         fp = prolif.Fingerprint()
     else:
         fp = prolif.Fingerprint(interactions)
-    
-    # Gather ligands from the TriageBiomolecule objects
+
+   
     ligand_poses = []
-    for ligand_pose in mol2_supplier(ligand.pose_path):
+    # Use prolif.molecule.sdf_supplier for SDF files
+    for ligand_pose in sdf_supplier(ligand.pose_path):
         if ligand_pose is None:
             raise ValueError(f"Invalid pose in {ligand.pose_path}")
         ligand_poses.append(ligand_pose)
 
     # Compute the fingerprints for all ligand poses against the receptor
-    fp.run_from_iterable(ligand_poses, receptor_molecule)
+    fp.run_from_iterable(ligand_poses, receptor_molecule, progress=False)
     
     # Convert to a DataFrame. The count flag controls whether a count or bit fingerprint is returned.
         # Get appropriate output format
     df = fp.to_dataframe(count=True, dtype=int)
-
+    print("prolif fingerprint here")
+    print(df)
     if format == "dataframe":
         return df.reset_index(drop=True)
     elif format == "bitvectors":
@@ -142,10 +139,17 @@ def get_prolif_from_biomolecule(ligand: TriageBiomolecule, receptor: TriageBiomo
         return to_countvectors(df)
     else:
         raise ValueError(f"Unknown format: {format}. Use 'dataframe', 'bitvectors', or 'countvectors'.")
- 
+
+def fps_to_dense_matrix(fps):
+    n_bits = fps.GetNumBits()
+    X = np.zeros((len(fps), n_bits), dtype=np.uint8)
+    for i, fp in enumerate(fps):
+        DataStructs.ConvertToNumpyArray(fp, X[i])
+    return X  
+
 #creates fingerprints
-def create_fingerprint_dataframe(ligands: list, receptor: TriageBiomolecule,
-                                  fingerprint_type: str = "prolif",
+def create_fingerprint_dataframe(ligands: list,
+                                  fingerprint_type: str = "prolif_bit",
                                   format="bitvectors",
                                   interactions="all") -> pd.DataFrame: 
     """
@@ -185,9 +189,13 @@ def create_fingerprint_dataframe(ligands: list, receptor: TriageBiomolecule,
             DataStructs.ConvertToNumpyArray(fp, arr)
             fingerprint_list.append(arr)
             ligand_ids.append(ligand.entity_id)
-        elif fingerprint_type == "prolif":
-            df = get_prolif_from_biomolecule(ligand, receptor, format=format, interactions=interactions)
-            fingerprint_list.append(df.values[0])  # grabbing the first fingerprint (pose) this is the usual case
+        elif fingerprint_type == "prolif_bit" or fingerprint_type == "prolif_count":
+            try:
+                numpy_fp = get_prolif_from_biomolecule(ligand, ligand, format=format, interactions=interactions)
+            except Exception as e:
+                tqdm.write(f"Skipping ligand {getattr(ligand, 'entity_id', 'unknown')}: {e}")
+                continue
+            fingerprint_list.append(numpy_fp)  # grabbing the first fingerprint (pose) this is the usual case
             ligand_ids.append(ligand.entity_id)
         else:
             raise ValueError(f"Unknown fingerprint type: {fingerprint_type}. Use 'ecfp4', 'ecfp6', or 'prolif'.")
@@ -198,7 +206,7 @@ def create_fingerprint_dataframe(ligands: list, receptor: TriageBiomolecule,
         tqdm.write(f"Estimated time remaining: {remaining_time:.2f} seconds")
     
     # Combine all fingerprints into a single DataFrame
-    fingerprint_df = pd.DataFrame(fingerprint_list, index=ligand_ids)
+    fingerprint_df = pd.Series(fingerprint_list, index=ligand_ids)
     return fingerprint_df
 
 #pushes calculations back to the biomolecule object chain
@@ -225,10 +233,30 @@ def store_fingerprints_from_df(fingerprint_df: pd.DataFrame,
     for fingerprint_df_id in fingerprint_df.index:
         for ligand in biomolecules:
             if ligand.entity_id == fingerprint_df_id:
-                ligand.store_fingerprint(fingerprint_df.loc[fingerprint_df_id].values, fingerprint_type)
+                print("fingerprint to be stored: ")
+                print(fingerprint_df.loc[fingerprint_df_id])
+                print("fingerprint type: ")
+                print(fingerprint_type)
+                value = fingerprint_df.loc[fingerprint_df_id]
+
+                # If it's an RDKit ExplicitBitVect (or duck-typed), convert to numpy array
+                if isinstance(value, DataStructs.ExplicitBitVect) or hasattr(value, "GetNumBits"):
+                    try:
+                        n_bits = value.GetNumBits()
+                        arr = np.zeros((n_bits,), dtype=np.uint8)
+                        DataStructs.ConvertToNumpyArray(value, arr)
+                        ligand.store_fingerprint(arr, fingerprint_type)
+                    except Exception:
+                        # Fallback: try list conversion
+                        ligand.store_fingerprint(np.asarray(list(value)), fingerprint_type)
+                elif isinstance(value, np.ndarray):
+                    ligand.store_fingerprint(value, fingerprint_type)
+                else:
+                    # For pandas Series, lists, or other array-like objects
+                    ligand.store_fingerprint(np.asarray(value), fingerprint_type)
                 break
 
-def calculate_fingerprints(biomolecules: list[TriageBiomolecule], receptor: TriageBiomolecule, fingerprint_type: str) -> None:
+def calculate_fingerprints(biomolecules: list[TriageBiomolecule], fingerprint_type: str) -> None:
     """
     Calculate and store fingerprints for a list of TriageBiomolecule objects.
     
@@ -244,167 +272,13 @@ def calculate_fingerprints(biomolecules: list[TriageBiomolecule], receptor: Tria
     This function calculates fingerprints for each biomolecule and stores them in the biomolecule object.
     """
     
-    if not receptor:
-        raise ValueError("No receptor found in the provided biomolecules.")
+   # if not receptor:
+    #    raise ValueError("No receptor founds in the provided biomolecules.")
     
-    fingerprint_df = create_fingerprint_dataframe(biomolecules, receptor, fingerprint_type=fingerprint_type)
+    fingerprint_df = create_fingerprint_dataframe(biomolecules, fingerprint_type=fingerprint_type)
     store_fingerprints_from_df(fingerprint_df, biomolecules, fingerprint_type=fingerprint_type)
 
-def extract_ligands_to_sdf(
-    cif_path: str,
-    out_sdf: str,
-    model_index: int = 0,
-    exclude_resnames: Iterable[str] = ("HOH", "WAT", "DOD", "H2O"),
-    exclude_common_ions: bool = True,
-    min_atoms: int = 3,
-) -> int:
-    """
-    Extract hetero small-molecule ligands from an mmCIF and save them to an SDF.
-    
-    Parameters
-    ----------
-    cif_path : str
-        Path to input .cif (or .cif.gz).
-    out_sdf : str
-        Path to output .sdf (multi-molecule).
-    model_index : int
-        Which model to use (0 = first).
-    exclude_resnames : Iterable[str]
-        Residue names to ignore (waters by default).
-    exclude_common_ions : bool
-        If True, skip common monoatomic/diatomic ions (NA, CL, MG, CA, ZN, ...).
-    min_atoms : int
-        Skip residues with fewer than this many atoms (avoids single ions).
-    
-    Returns
-    -------
-    int
-        Number of ligand molecules written.
-    """
-    # --- Parse structure
-    parser = MMCIFParser(QUIET=True)
-    structure = parser.get_structure("X", cif_path)
-    models = list(structure.get_models())
-    if not models:
-        raise ValueError("No models found in structure.")
-    if model_index >= len(models):
-        raise IndexError(f"Requested model_index {model_index} but only {len(models)} model(s) present.")
-    model = models[model_index]
 
-    # Sets for filtering
-    exclude_resnames = set(exclude_resnames)
-    common_ions: Set[str] = {
-        "NA", "K", "CL", "CA", "MG", "MN", "ZN", "FE", "CU", "CO", "NI", "CD", "SR",
-        "CS", "BR", "F", "I", "HG", "PB", "BA", "AL", "RB", "YB", "PT", "AG", "AU"
-    }
-
-    def is_hetero_residue(res) -> bool:
-        # res.id tuple: (hetfield, resseq, icode); hetfield like "H_" for HETATM, " " for ATOM
-        hetflag = res.id[0]
-        return hetflag.strip() != ""  # True for HETATM
-
-    def is_water_or_excluded(res) -> bool:
-        rn = res.get_resname().strip().upper()
-        if rn in exclude_resnames:
-            return True
-        if exclude_common_ions and (rn in common_ions or len(rn) <= 2):
-            return True
-        return False
-
-    def choose_altloc(atoms):
-        """
-        Yield atoms with a consistent altloc choice per atom name:
-        Prefer blank altloc '', else 'A', else first seen.
-        """
-        chosen = {}
-        for a in atoms:
-            alt = a.get_altloc() or ""
-            key = (a.get_id(), a.get_name())
-            if key not in chosen:
-                chosen[key] = a
-            else:
-                # prefer '' over others; then 'A'
-                curr = chosen[key]
-                curr_alt = curr.get_altloc() or ""
-                if curr_alt != "" and (alt == "" or (curr_alt != "A" and alt == "A")):
-                    chosen[key] = a
-        return list(chosen.values())
-
-    # --- Collect hetero residues (ligands)
-    lig_residues = []
-    for chain in model.get_chains():
-        for res in chain.get_residues():
-            if not is_hetero_residue(res):
-                continue
-            if is_water_or_excluded(res):
-                continue
-            # Require a minimum atom count to avoid ions
-            if sum(1 for _ in res.get_atoms()) < min_atoms:
-                continue
-            lig_residues.append((chain.id, res))
-
-    if not lig_residues:
-        # Create an empty SDF to be explicit, or raise?
-        open(out_sdf, "w").close()
-        return 0
-
-    writer = SDWriter(out_sdf)
-    n_written = 0
-
-    for chain_id, res in lig_residues:
-        atoms = list(res.get_atoms())
-        atoms = choose_altloc(atoms)
-
-        # Build an RDKit molecule (no bonds yet)
-        rw = rdchem.RWMol()
-        conf = rdchem.Conformer(len(atoms))
-
-        idx_map = {}  # Biopython atom -> RDKit index
-        for i, a in enumerate(atoms):
-            # element symbol can be None in some mmCIFs; fall back to first letter of atom name
-            elem = (a.element or a.get_name().strip()[0]).capitalize()
-            try:
-                rd_atom = rdchem.Atom(elem)
-            except RuntimeError:
-                # Fallback to carbon if element fails (very rare labels)
-                rd_atom = rdchem.Atom("C")
-            rd_idx = rw.AddAtom(rd_atom)
-            x, y, z = a.coord  # numpy array
-            conf.SetAtomPosition(rd_idx, Point3D(float(x), float(y), float(z)))
-            idx_map[i] = rd_idx
-
-        rw.AddConformer(conf, assignId=True)
-
-        # Infer bonds from 3D geometry
-        mol = rw.GetMol()
-        try:
-            rdDetermineBonds.DetermineBonds(mol)  # heuristic bond & order perception
-            Chem.SanitizeMol(mol)
-        except Exception:
-            # As a fallback, try connectivity-only (no bond orders)
-            try:
-                rdDetermineBonds.DetermineConnectivity(mol)
-                Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ADJUSTHS)
-            except Exception:
-                # If it still fails, skip this residue
-                continue
-
-        # Title & annotations
-        resname = res.get_resname().strip()
-        resseq = res.id[1]
-        icode = res.id[2].strip() if res.id[2] else ""
-        title = f"{resname}_{chain_id}_{resseq}{icode}"
-        mol.SetProp("_Name", title)
-        mol.SetProp("resname", resname)
-        mol.SetProp("chain_id", chain_id)
-        mol.SetProp("resseq", str(resseq))
-        mol.SetProp("icode", icode)
-
-        writer.write(mol)
-        n_written += 1
-
-    writer.close()
-    return n_written
 
 def generate_prolif_fingerprints_from_outputs(
     outputs_dir: str,
@@ -413,49 +287,69 @@ def generate_prolif_fingerprints_from_outputs(
     pose_ext: str = ".cif",
     verbose: bool = False):
     """
-    Traverse the outputs directory, generate ProLIF fingerprints for each ligand-receptor pair,
+    Traverse the outputs directory, in the outputs directory there are subdirectories 
+    with the names of compounds. in each compound subdirectory there is a .cif file that ends in the
+    format {compound_name}_model_0.cif. With that .cif file as input use the extract_ligand() and
+    extract_protein_receptor() to genereate parallel files iwth the suffix {compound_name}_model_ligand.cif and {compound_name}_model_protein.cif,
+    then use openbabel to convert the ligand.cif file to .sdf format. With these new files, generated, create 
+    a TriageBiomolecule object out of it and put that into a list. From that list of TriageBiomolecule objects, calculate prolif
+    fingerprints from them using the calculate_fingerprints() funciton and then save the generated data as a parquet.
     and export as a parquet file.
-
-    Args:
-        outputs_dir (str): Path to the outputs directory.
-        receptor_pdb_dir (str): Path to the directory containing receptor PDB files named as {receptor_name}.pdb.
-        output_parquet (str): Path to save the resulting parquet file.
-        pose_ext (str): Extension of the ligand pose files (default: ".cif").
     """
-
-    # Determine which subdirectory to use
-    combined_dir = os.path.join(outputs_dir, "combined_predictions")
-    predictions_dir = os.path.join(outputs_dir, "predictions")
-    print(combined_dir)
-    print(predictions_dir)
-    if os.path.isdir(combined_dir):
-        preds_dir = combined_dir
-    elif os.path.isdir(predictions_dir):
-        preds_dir = predictions_dir
-    else:
-        raise FileNotFoundError("Neither 'combined_predictions' nor 'predictions' subdirectory found in outputs_dir.")
-    
-    # Walk through every subdirectory in preds_dir
-    for root, dirs, files in os.walk(preds_dir):
-        for subdir in dirs:
-            subdir_path = os.path.join(root, subdir)
-            # Now you can access the contents of each subdirectory
-            subdir_files = os.listdir(subdir_path)
+    biomolecules = []
+    for compound_name in os.listdir(outputs_dir):
+        compound_dir = os.path.join(outputs_dir, compound_name)
+        if not os.path.isdir(compound_dir):
+            continue
+        # Find the .cif file ending with _model_0.cif
+        cif_files = [f for f in os.listdir(compound_dir) if f.endswith("_model_0.cif")]
+        if not cif_files:
             if verbose:
-                print(f"\033[92mSubdirectory: {subdir_path}\033[0m")
-                print(f"\033[92mFiles: {subdir_files}\033[0m")
-            # You can process each file in subdir_files as needed
-            cif_files = [f for f in subdir_files if f.endswith(pose_ext)]
-            if not cif_files:
+                print(f"No _model_0.cif file found in {compound_dir}")
+            continue
+        cif_file = cif_files[0]
+        cif_path = os.path.join(compound_dir, cif_file)
+        ligand_cif_path = os.path.splitext(cif_path)[0] + "_ligand.cif"
+        protein_cif_path = os.path.splitext(cif_path)[0] + "_protein.cif"
+        protein_pdb_path = os.path.splitext(cif_path)[0] + "_protien.pdb"
+        ligand_sdf_path = os.path.splitext(ligand_cif_path)[0] + ".sdf"
+        # Extract ligand and protein
+        try:
+            extract_ligand(cif_path, ligand_cif_path)
+            extract_protein_receptor(cif_path, protein_pdb_path, out_format="pdb")
+        except Exception as e:
+            if verbose:
+                print(f"Failed to extract ligand/protein from {cif_path}: {e}")
+            continue
+        # Convert ligand cif to sdf using openbabel
+        try:
+            mols = list(pybel.readfile("cif", ligand_cif_path))
+            if not mols:
                 if verbose:
-                    print(f"No .cif file found in {subdir_path}")
-                continue
-            cif_path = os.path.join(subdir_path, cif_files[0])
+                    print(f"No molecules found in {ligand_cif_path}")
+            else:
+                out = pybel.Outputfile("sdf", ligand_sdf_path, overwrite=True)
+                for m in mols:
+                    out.write(m)
+                out.close()
+        except Exception as e:
             if verbose:
-                print(f"Found .cif file: {cif_path}")
-            #now creating a sdf file based on the cif file
-            sdf_path = os.path.splitext(cif_path)[0] + ".sdf"
-            if verbose:
-                print(f"Creating .sdf file: {sdf_path}")
-
-            extract_ligands_to_sdf(cif_path, sdf_path)
+                print(f"OpenBabel conversion failed for {ligand_cif_path}: {e}")
+            continue
+        # Create TriageBiomolecule object
+        biomol = TriageBiomolecule(
+            entity_id=compound_name,
+            entity_type="ligand",
+            pose_path=ligand_sdf_path,
+            paired_receptor_path=protein_pdb_path
+        )
+        biomolecules.append(biomol)
+    if verbose:
+        print(f"Calculating prolif fingerprints for {len(biomolecules)} biomolecules...")
+    if verbose:
+        print(f"Exporting fingerprints to {output_parquet}...")
+           
+    # Calculate prolif fingerprints and export as parquet
+    calculate_fingerprints(biomolecules, fingerprint_type="prolif_count")
+    TriageBiomolecule.to_parquet(biomolecules, output_parquet)
+    

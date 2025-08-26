@@ -4,7 +4,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 import csv
 from typing import Union
-from mmseqs2 import run_mmseqs2
+from triage_boltz.mmseqs2 import run_mmseqs2
 import subprocess
 def check_smiles(smiles: str, verbose: bool = True) -> Union[str, None]:
     """

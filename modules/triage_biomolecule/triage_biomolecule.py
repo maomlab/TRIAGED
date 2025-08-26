@@ -28,7 +28,7 @@ class TriageBiomolecule:
     pair_msa_path: Optional[str] = None
     combined_msa_path: Optional[str] = None
     pose_path: Optional[str] = None
-
+    paired_receptor_path: Optional[str] = None
     #fingerprints: 
     ecfp: Optional[np.ndarray] = None  # ECFP fingerprint
     prolif_count: Optional[np.ndarray] = None # ProLIF count vector
@@ -239,6 +239,17 @@ class TriageBiomolecule:
         else:
             raise ValueError(f"Unsupported fingerprint type: {fingerprint_type}")
 
+    def view_biomolecule(self) -> None:
+        """
+        Print all non-None attributes of the biomolecule.
+        """
+        print(f"{self.__class__.__name__} attributes:")
+        for field in self.__dataclass_fields__:
+            value = getattr(self, field)
+            if value is not None:
+                print(f"  {field}: {value}")
+
+
     @staticmethod
     def from_csv(csv_file: str) -> list[list['TriageBiomolecule']]:
         """
@@ -318,18 +329,20 @@ class TriageBiomolecule:
         - biomolecules (list[TriageBiomolecule]): List of TriageBiomolecule objects.
         - parquet_path (str): Output path for the parquet file.
         """
-        # Convert dataclass objects to dicts
-        dicts = []
-        for obj in biomolecules:
-            d = obj.__dict__.copy()
-            # Convert numpy arrays and torch tensors to lists for serialization
-            for k, v in d.items():
-                if isinstance(v, np.ndarray):
-                    d[k] = v.tolist()
-                elif isinstance(v, torch.Tensor):
-                    d[k] = v.cpu().numpy().tolist()
-            dicts.append(d)
-        df = pd.DataFrame(dicts)
+        # Prepare a list of dicts for DataFrame construction
+        records = []
+        for biomol in biomolecules:
+            print(f"the biomolecule info is: ")
+            biomol.view_biomolecule()
+            record = {}
+            for field in biomol.__dataclass_fields__:
+                value = getattr(biomol, field)
+                # Convert numpy arrays to lists for serialization
+                if isinstance(value, np.ndarray):
+                    value = value.tolist()
+                record[field] = value
+            records.append(record)
+        df = pd.DataFrame(records)
         table = pa.Table.from_pandas(df)
         pq.write_table(table, parquet_path)
 
