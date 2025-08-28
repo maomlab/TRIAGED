@@ -13,6 +13,7 @@ import numpy as np
 from scipy import stats
 from statsmodels.stats import weightstats as stests
 from typing import List, Dict, Optional, Tuple, Union
+from logauc_new import compute_logauc_from_dataframe as logAUC_from_dataframe
 
     
 def convert_IC_to_energy(IC: float) -> float:
@@ -119,54 +120,6 @@ def enrichment_standard(scores1: Dict[str, List[Union[str, float]]], lig_list: L
     fig.tight_layout(pad=2.0)
     fig.savefig(f"plot_{metrics}.png")
 
-def logAUC_from_dataframe(df: pd.DataFrame, score_col: str, label_col: str) -> float:
-    """
-    Compute log AUC from a DataFrame containing scores, true positive labels, and compound names.
-    taken from bootstrap_tldr.py 
-    Parameters:
-    - df: pandas DataFrame containing the data.
-    - score_col: Name of the column containing scores.
-    - label_col: Name of the column labeling true positives (1 for true positive, 0 otherwise).
-
-    Returns:
-    - Adjusted log AUC value.
-    """
-    LOGAUC_MAX = 1.0   # this should not change
-    LOGAUC_MIN = 0.001 # this can be adjusted for large datasets with strong early enrichment
-    RANDOM_LOGAUC = (LOGAUC_MAX - LOGAUC_MIN) / np.log(10) / np.log10(LOGAUC_MAX / LOGAUC_MIN)
-
-    # Sort the DataFrame by scores in descending order
-    df_sorted = df.sort_values(by=score_col, ascending=False)
-
-    # Compute cumulative true positive rate (TPR) and false positive rate (FPR)
-    total_positives = df[label_col].sum()
-    total_negatives = len(df) - total_positives
-
-    df_sorted['TPR'] = df_sorted[label_col].cumsum() / total_positives
-    df_sorted['FPR'] = (~df_sorted[label_col].astype(bool)).cumsum() / total_negatives
-
-    # Generate points array (FPR, TPR)
-    points = df_sorted[['FPR', 'TPR']].values
-
-    # Filter and normalize points
-    npoints = []
-    for x in points:
-        if (x[0] >= LOGAUC_MIN) and (x[0] <= LOGAUC_MAX):
-            npoints.append([x[0], x[1]])
-
-    # Compute log AUC
-    area = 0.0
-    for point2, point1 in zip(npoints[1:], npoints[:-1]):
-        if point2[0] - point1[0] < 0.000001:
-            continue
-
-        dx = point2[0] - point1[0]
-        dy = point2[1] - point1[1]
-        intercept = point2[1] - (dy) / (dx) * point2[0]
-        area += dy / np.log(10) + intercept * (np.log10(point2[0]) - np.log10(point1[0]))
-
-    # Return adjusted log AUC
-    return area / np.log10(LOGAUC_MAX / LOGAUC_MIN) - RANDOM_LOGAUC
 
 def compute_vscreen_metrics(
     df_pos: pd.DataFrame, 
