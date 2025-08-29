@@ -36,10 +36,36 @@ def main():
             if 'is_binder' not in reference_df.columns:
                 raise ValueError("Reference data must contain a column named 'is_binder' to indicate if the compound is a binder.")
             else:
-                positive_df = reference_df[reference_df['is_binder'] == True]
-                negative_df = reference_df[reference_df['is_binder'] == False]
+                vals = reference_df['is_binder']
+
+                def to_bool(v):
+                    if pd.isna(v):
+                        return None
+                    if isinstance(v, bool):
+                        return v
+                    # ints/floats (note: bool is subclass of int, so check bool first)
+                    if isinstance(v, (int, float)) and not isinstance(v, bool):
+                        if v == 1:
+                            return True
+                        if v == 0:
+                            return False
+                        return None
+                    s = str(v).strip().lower()
+                    if s in ('1', 'true', 't', 'yes', 'y'):
+                        return True
+                    if s in ('0', 'false', 'f', 'no', 'n'):
+                        return False
+                    return None
+
+                bool_series = vals.apply(to_bool)
+                if bool_series.isnull().any():
+                    bad_vals = pd.unique(vals[bool_series.isnull()])
+                    raise ValueError(f"Could not interpret some 'is_binder' values: {bad_vals}. Expected boolean-like values (True/False, 1/0, 'true'/'false', 'yes'/'no').")
+
+                mask = bool_series.astype(bool)
+                positive_df = reference_df[mask]
+                negative_df = reference_df[~mask]
                 print(f"True Positive compounds: {len(positive_df)}, True Negative compounds: {len(negative_df)}")
-                
                 metrics_output = {}
                 #computing for "DOCK score" or "score"
                 print(reference_df.columns)
