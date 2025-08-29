@@ -155,7 +155,13 @@ def compute_vscreen_metrics(
     print(f"df_merged:")
     print(df_merged)
 
-    df_sorted = df_merged.sort_values(by=score_col, ascending=False).reset_index(drop=True)
+    # Define which scores are 'lower is better'
+    LOWER_IS_BETTER = {
+        "DOCK score", "score", "Affinity Pred Value", "kcal/mol"
+    }
+    # All others are assumed 'higher is better'
+    ascending = True if score_col in LOWER_IS_BETTER else False
+    df_sorted = df_merged.sort_values(by=score_col, ascending=ascending).reset_index(drop=True)
 
     n_total = len(df_sorted)
     n_actives = df_sorted['label'].sum()
