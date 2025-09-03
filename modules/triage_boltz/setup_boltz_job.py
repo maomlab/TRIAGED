@@ -77,17 +77,17 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                 #print(f"DEBUG: {first_ligand}, {first_protein}")
                 yaml_file = os.path.join(job_dir, f"{first_ligand.entity_id}.yaml")
                 
+
                 with open(yaml_file, 'w') as yaml:
                     yaml.write(f"version: 1\n")
                     yaml.write("sequences:\n")
-                    
                     total_compound_num = 0
+                    chain_id_map = {}  # Map entity to chain ID for constraints
                     for entry in row:   
                         if entry.entity_type == "ligand":
                             catalog_id = entry.entity_id
                             smiles = entry.smiles
                             num = entry.num  # Default to 1 if not provided
-                            # Sanitize and validate SMILES
                             catalog_id = sanitize_compound_id(catalog_id)
                             smiles = check_smiles(smiles, verbose=True)
                             if smiles is None:
@@ -95,6 +95,7 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                                 continue
                             for compound_num in range(1, num + 1):
                                 ligand_chain_id = chr(ord('A') + (total_compound_num))
+                                chain_id_map[(entry.entity_type, entry.entity_id)] = ligand_chain_id
                                 yaml.write("  - ligand:\n")
                                 yaml.write(f"      id: {ligand_chain_id}\n")
                                 yaml.write(f"      smiles: '{smiles}'\n")
@@ -104,9 +105,9 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                             protein_num = entry.num  # Default to 1 if not provided
                             protein_msa = entry.msa_path
                             protein_pair_msa = entry.pair_msa_path if hasattr(entry, 'pair_msa_path') else None
-                            # Create .yaml entries for each protein 
                             for num in range(1, int(protein_num) + 1):
                                 protein_chain_id = chr(ord('A') + (total_compound_num))
+                                chain_id_map[(entry.entity_type, entry.entity_id)] = protein_chain_id
                                 yaml.write("  - protein:\n")
                                 yaml.write(f"      id: {protein_chain_id}\n")
                                 yaml.write(f"      sequence: {protein_sequence}\n")
@@ -118,9 +119,9 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                         elif entry.entity_type == "nucleic_acid":
                             nucleic_acid_sequence = entry.sequence
                             nucleic_acid_num = entry.num  # Default to 1 if not provided
-                            # Create .yaml entries for each nucleic acid
                             for num in range(1, int(nucleic_acid_num) + 1):
                                 nucleic_acid_chain_id = chr(ord('A') + (total_compound_num))
+                                chain_id_map[(entry.entity_type, entry.entity_id)] = nucleic_acid_chain_id
                                 yaml.write("  - dna:\n")
                                 yaml.write(f"      id: {nucleic_acid_chain_id}\n")
                                 yaml.write(f"      sequence: {nucleic_acid_sequence}\n")
@@ -128,14 +129,30 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                         elif entry.entity_type == "rna":
                             rna_sequence = entry.sequence
                             rna_num = entry.num
-                            # Create .yaml entries for each RNA
                             for num in range(1, int(rna_num) + 1):
                                 rna_chain_id = chr(ord('A') + (total_compound_num))
+                                chain_id_map[(entry.entity_type, entry.entity_id)] = rna_chain_id
                                 yaml.write("  - rna:\n")
                                 yaml.write(f"      id: {rna_chain_id}\n")
                                 yaml.write(f"      sequence: {rna_sequence}\n")
                                 total_compound_num += 1
-                    
+
+                    # Write constraints if present
+                    for entry in row:
+                        if hasattr(entry, 'constraints') and entry.constraints:
+                            for chain_id, contacts in entry.constraints.items():
+                                # chain_id is the binder (e.g., 'A'), contacts is a list of (res_idx, atom_name)
+                                yaml.write("constraints:\n")
+                                yaml.write("  - pocket:\n")
+                                yaml.write(f"      binder: {chain_id}\n")
+                                yaml.write("      contacts: [")
+                                contact_strs = []
+                                for res_idx, atom_name in contacts:
+                                    contact_strs.append(f"[{chain_id}, {res_idx}/{atom_name}]")
+                                yaml.write(", ".join(contact_strs))
+                                yaml.write("]\n")
+                                yaml.write("      max_distance: 10.0\n")  # Default distance, can be parameterized
+
                     yaml.write("properties:\n")
                     yaml.write("  - affinity:\n")
                     yaml.write(f"      binder: A\n")

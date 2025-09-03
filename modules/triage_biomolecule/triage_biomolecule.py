@@ -29,6 +29,8 @@ class TriageBiomolecule:
     #coordinates: Optional[torch.Tensor] = field(default=None)
     #mask: Optional[torch.Tensor] = field(default=None)
 
+    constraints: Optional[dict] = None  # New: store constraints for this biomolecule
+
     def __post_init__(self):
         """
         Validate the inputs after initialization.
@@ -225,11 +227,17 @@ class TriageBiomolecule:
         parsed_data = parse_input_csv(csv_file)
         biomolecules = []
 
+        import ast
         for row in parsed_data:
             row_biomolecules = []
             for entry in row:
-                #print(f"Processing entry: {entry}")
                 try:
+                    constraints = None
+                    if "pocket_constraints" in entry and entry["pocket_constraints"]:
+                        try:
+                            constraints = ast.literal_eval(entry["pocket_constraints"])
+                        except Exception as e:
+                            print(f"[WARN] Could not parse pocket_constraints: {entry['pocket_constraints']}. Error: {e}")
                     if "compound_ID" in entry:
                         row_biomolecules.append(
                             TriageBiomolecule(
@@ -237,7 +245,8 @@ class TriageBiomolecule:
                                 entity_type="ligand",
                                 smiles=entry.get("SMILES"),
                                 inchi=entry.get("InChI"),
-                                num=int(entry.get("compound_num"))
+                                num=int(entry.get("compound_num")),
+                                constraints=constraints
                             )
                         )
                     elif "protein_ID" in entry:
@@ -248,7 +257,8 @@ class TriageBiomolecule:
                                 sequence=entry.get("protein_sequence"),
                                 pdb_path=entry.get("pdb_path"),
                                 pdb_id=entry.get("pdb_id"),
-                                num=int(entry.get("protein_num"))
+                                num=int(entry.get("protein_num")),
+                                constraints=constraints
                             )
                         )
                     elif "dna_ID" in entry:
@@ -257,7 +267,8 @@ class TriageBiomolecule:
                                 entity_id=entry["dna_ID"],
                                 entity_type="dna",
                                 sequence=entry.get("dna_sequence"),
-                                num=int(entry.get("dna_num"))
+                                num=int(entry.get("dna_num")),
+                                constraints=constraints
                             )
                         )
                     elif "rna_ID" in entry:
@@ -266,16 +277,14 @@ class TriageBiomolecule:
                                 entity_id=entry["rna_ID"],
                                 entity_type="rna",
                                 sequence=entry.get("rna_sequence"),
-                                num=int(entry.get("rna_num"))
+                                num=int(entry.get("rna_num")),
+                                constraints=constraints
                             )
                         )
-                
                 except Exception as e:
                     print(f"[ERROR] Failed to create TriageBiomolecule from entry {entry}: {e}")
-                    # Skip the entire row if any entry is invalid
                     row_biomolecules = []
                     break
             if row_biomolecules:
                 biomolecules.append(row_biomolecules)
-
         return biomolecules
