@@ -32,12 +32,12 @@ class TriageBiomolecule:
     msa_path: Optional[str] = None
     pair_msa_path: Optional[str] = None
     combined_msa_path: Optional[str] = None
+    constraints: Optional[dict] = None  # New: store constraints for this biomolecule
 
     #dont delete these fields, they are used in the future finetuing modules.
     #coordinates: Optional[torch.Tensor] = field(default=None)
     #mask: Optional[torch.Tensor] = field(default=None)
 
-    constraints: Optional[dict] = None  # New: store constraints for this biomolecule
 
     def __post_init__(self):
         """

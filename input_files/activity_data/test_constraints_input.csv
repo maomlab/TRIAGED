@@ -1,0 +1,4 @@
+compound_ID,SMILES,compound_num,pocket_constraints,protein_ID,protein_sequence,protein_num,pocket_constraints
+LIG1,CCO,1,"A:100/CA;A:101/N",PROT1,MADEUPSEQ1,1,"{A:(100,CA)}"
+LIG2,CCN,2,"B:50/O;B:51/N",PROT2,MADEUPSEQ2,1,"{B:(50,O)}"
+LIG3,CCC,1,"C:200/CB",PROT3,MADEUPSEQ3,1,"{C:(200,CB)}"
