@@ -167,6 +167,9 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                     # Parse constraints if present
                     if compound_entry is not None and constraints_key in row and row[constraints_key]:
                         # Expecting constraints as a string, e.g. "A:100/CA;B:50/N"
+                        print("Parsing constraints: ")
+                        print(row[constraints_key])
+                        
                         constraints_str = row[constraints_key].strip()
                         constraints = {}
                         for item in constraints_str.split(';'):
