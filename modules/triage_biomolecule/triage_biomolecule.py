@@ -9,6 +9,14 @@ from triage_boltz.pdb_to_fasta import pdb_to_fasta
 from triage_boltz.fasta_utils import build_fasta_seq
 @dataclass
 class TriageBiomolecule:
+    def __str__(self):
+        """
+        Return a human-readable string representation of all class variables.
+        """
+        attrs = []
+        for k, v in self.__dict__.items():
+            attrs.append(f"  {k}: {v}")
+        return f"TriageBiomolecule(\n" + "\n".join(attrs) + "\n)"
     """
     A data class to store information about intermolecular entities.
     needs to be compatable with all modules in the triage pipeline.

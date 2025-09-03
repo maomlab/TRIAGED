@@ -84,6 +84,7 @@ def create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_doc
                     total_compound_num = 0
                     chain_id_map = {}  # Map entity to chain ID for constraints
                     for entry in row:   
+                        print(entry)
                         if entry.entity_type == "ligand":
                             catalog_id = entry.entity_id
                             smiles = entry.smiles
