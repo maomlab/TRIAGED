@@ -240,14 +240,6 @@ boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8
 def main():
     parser = argparse.ArgumentParser(
     description="Setup Boltz job directories and YAML files.",
-    epilog="Additional Information:\n"
-            "- check_smiles(smiles: str, verbose: bool = True): Validates and canonicalizes a SMILES string.\n"
-            "- ensure_environment_variables(): Ensures necessary environment variables are set.\n"
-            "- sanitize_compound_id(compound_ID: str): Sanitizes compound IDs for file-system compatibility.\n"
-            "- parse_input_csv(csv_file: str): Parses a CSV file with compound and protein data.\n"
-            "- generate_msa(project_dir: str, pdb_name: str, sequence: Union[str, list[str]]): Generates a Multiple Sequence Alignment (MSA).\n"
-            "- create_boltz_job(csv_file: str, output_dir: str, num_jobs: int, covalent_docking: bool=False, protein_nmers: int=1): Creates job directories and YAML files.\n"
-            "- create_slurm_submit_script(work_dir, receptor, output_dir, job_name='boltz_screen'): Creates a SLURM submit script for Boltz jobs.",
     formatter_class=argparse.RawTextHelpFormatter)
     
     parser.add_argument("-i", "--input_csv_file", type=str, required=False, help="Path to the input CSV file. Required for non-covalent docking.")

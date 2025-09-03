@@ -86,6 +86,7 @@ def parse_input_csv(csv_file: str) -> list[dict]:
     """
     parsed_data = []
 
+
     with open(csv_file, 'r') as csvfile:
         reader = csv.DictReader(csvfile)
         for row in reader:
@@ -93,11 +94,8 @@ def parse_input_csv(csv_file: str) -> list[dict]:
             #print(f"Processing row: {row}")
             #print(f"Row keys: {list(row.keys())}")
             for key in row.keys():
-            
-                if key.startswith("compound_ID") or key.startswith("protein_ID") or key.startswith("dna_ID") or key.startswith("rna_ID") and row[key]:  
-                    #print(f"Processing key: {key}")
+                if key.startswith("compound_ID") or key.startswith("protein_ID") or key.startswith("dna_ID") or key.startswith("rna_ID") and row[key]:
                     if (len(key) > len("compound_ID")) or (len(key) > len("protein_ID")) or (len(key) > len("dna_ID")) or (len(key) > len("rna_ID")):
-                        #print(f"Key '{key}' has a suffix, processing accordingly.")
                         if key.startswith("compound_ID"):
                             suffix = key[len("compound_ID"):]
                         elif key.startswith("dna_ID"):
@@ -105,26 +103,26 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                         elif key.startswith("rna_ID"):
                             suffix = key[len("rna_ID"):]
                         elif key.startswith("protein_ID"):
-                            suffix = key[len("protein_ID"):]  
-                        
-                        smiles_key = f"SMILES{suffix}" 
-                        num_key = f"compound_num{suffix}"  
+                            suffix = key[len("protein_ID"):]
+                        smiles_key = f"SMILES{suffix}"
+                        num_key = f"compound_num{suffix}"
                         inchi_key = f"InChI{suffix}"
-                        protein_id_key = f"protein_ID{suffix}" 
-                        protein_sequence_key = f"protein_sequence{suffix}"  
-                        protein_num_key = f"protein_num{suffix}" 
+                        protein_id_key = f"protein_ID{suffix}"
+                        protein_sequence_key = f"protein_sequence{suffix}"
+                        protein_num_key = f"protein_num{suffix}"
                         pdb_path_key = f"pdb_path{suffix}"
                         pdb_id_key = f"pdb_id{suffix}"
                         dna_sequence_key = f"dna_sequence{suffix}"
                         dna_num_key = f"dna_num{suffix}"
                         rna_sequence_key = f"rna_sequence{suffix}"
                         rna_num_key = f"rna_num{suffix}"
+                        constraints_key = f"pocket_constraints{suffix}"
                     else:
-                        smiles_key = "SMILES"  
-                        num_key = "compound_num"  
+                        smiles_key = "SMILES"
+                        num_key = "compound_num"
                         inchi_key = "InChI"
-                        protein_id_key = "protein_ID"  
-                        protein_sequence_key = "protein_sequence"  
+                        protein_id_key = "protein_ID"
+                        protein_sequence_key = "protein_sequence"
                         protein_num_key = "protein_num"
                         pdb_path_key = "pdb_path"
                         pdb_id_key = "pdb_id"
@@ -132,7 +130,9 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                         dna_num_key = "dna_num"
                         rna_sequence_key = "rna_sequence"
                         rna_num_key = "rna_num"
-                    
+                        constraints_key = "pocket_constraints"
+
+                    compound_entry = None
                     if key.startswith("compound_ID") and row[key]:
                         if smiles_key in row and row[smiles_key]:
                             compound_entry = {
@@ -141,8 +141,7 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "compound_num": row[num_key].strip() if num_key in row and row[num_key] else "1",
                                 "inchi": row[inchi_key].strip() if inchi_key in row and row[inchi_key] else None
                             }
-                        compound_data.append(compound_entry)
-                    if key.startswith("protein_ID") and row[key]:    
+                    if key.startswith("protein_ID") and row[key]:
                         if protein_id_key in row and row[protein_id_key]:
                             compound_entry = {
                                 "protein_ID": row[protein_id_key].strip(),
@@ -151,7 +150,6 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "pdb_path": row[pdb_path_key].strip() if pdb_path_key in row and row[pdb_path_key] else None,
                                 "pdb_id": row[pdb_id_key].strip() if pdb_id_key in row and row[pdb_id_key] else None
                             }
-                        compound_data.append(compound_entry)
                     if key.startswith("dna_ID") and row[key]:
                         if dna_sequence_key in row and row[dna_sequence_key]:
                             compound_entry = {
@@ -159,8 +157,6 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "dna_sequence": row[dna_sequence_key].strip(),
                                 "dna_num": row[dna_num_key].strip() if dna_num_key in row and row[dna_num_key] else "1"
                             }
-                        compound_data.append(compound_entry)
-
                     if key.startswith("rna_ID") and row[key]:
                         if rna_sequence_key in row and row[rna_sequence_key]:
                             compound_entry = {
@@ -168,11 +164,28 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "rna_sequence": row[rna_sequence_key].strip(),
                                 "rna_num": row[rna_num_key].strip() if rna_num_key in row and row[rna_num_key] else "1"
                             }
+                    # Parse constraints if present
+                    if compound_entry is not None and constraints_key in row and row[constraints_key]:
+                        # Expecting constraints as a string, e.g. "A:100/CA;B:50/N"
+                        constraints_str = row[constraints_key].strip()
+                        constraints = {}
+                        for item in constraints_str.split(';'):
+                            item = item.strip()
+                            if not item:
+                                continue
+                            # Format: chain:res_idx/atom_name, e.g. A:100/CA
+                            try:
+                                chain_part, res_atom = item.split(':')
+                                res_idx, atom_name = res_atom.split('/')
+                                if chain_part not in constraints:
+                                    constraints[chain_part] = []
+                                constraints[chain_part].append((int(res_idx), atom_name))
+                            except Exception as e:
+                                print(f"[WARNING] Could not parse constraint '{item}': {e}")
+                        compound_entry["constraints"] = constraints
+                    if compound_entry is not None:
                         compound_data.append(compound_entry)
-
-                    #print(f"Parsed entry: {compound_entry}")
             parsed_data.append(compound_data)
-
     return parsed_data
 
 
