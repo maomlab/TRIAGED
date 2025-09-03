@@ -1,0 +1,2 @@
+compound_ID,SMILES,compound_num,pocket_constraints,protein_ID,protein_sequence,protein_num
+LIG1,C1=CC=CC=C1,1,"{'A': [(1, 'C1'), (2, 'N1')]}",PROT1,MADEUPSEQ,1
