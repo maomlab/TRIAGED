@@ -4,6 +4,7 @@ import argparse
 import json
 from analysis_utils import read_boltz_predictions, compute_vscreen_metrics
 import shutil
+import numbers
 
 
 def main():
@@ -70,8 +71,26 @@ def main():
             if 'is_binder' not in reference_df.columns:
                 raise ValueError("Reference data must contain a column named 'is_binder' to indicate if the compound is a binder.")
             else:
-                positive_df = reference_df[reference_df['is_binder'] == True]
-                negative_df = reference_df[reference_df['is_binder'] == False]
+                def _to_bool(v):
+                    if pd.isna(v):
+                        return None
+                    if isinstance(v, numbers.Number):
+                        if v == 1:
+                            return True
+                        if v == 0:
+                            return False
+                    s = str(v).strip().lower()
+                    if s in ('true', 't', '1', 'yes', 'y', 'TRUE', 'True'):
+                        return True
+                    if s in ('false', 'f', '0', 'no', 'n', 'FALSE', 'False'):
+                        return False
+                    return None
+
+                bool_series = reference_df['is_binder'].apply(_to_bool)
+                if bool_series.isnull().any():
+                    print("[WARN] Some 'is_binder' values could not be interpreted and will be ignored.")
+                positive_df = reference_df[bool_series == True].copy()
+                negative_df = reference_df[bool_series == False].copy()
                 print(f"True Positive compounds: {len(positive_df)}, True Negative compounds: {len(negative_df)}")
                 
                 metrics_output = {}

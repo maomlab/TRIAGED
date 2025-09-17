@@ -142,6 +142,9 @@ def compute_vscreen_metrics(
     # Ensure compound_col values are strings and stripped of whitespace for both DataFrames
     df_truth[compound_col] = df_truth[compound_col].astype(str).str.strip()
     df_pred[compound_col] = df_pred[compound_col].astype(str).str.strip()
+    # Ensure compound_col values are strings and stripped of whitespace for both DataFrames
+    df_truth[compound_col] = df_truth[compound_col].astype(str).str.strip()
+    df_pred[compound_col] = df_pred[compound_col].astype(str).str.strip()
     df_merged = pd.merge(df_truth, df_pred[[compound_col, score_col]], on=compound_col)
 
     if f"{score_col}_x" in df_merged.columns and f"{score_col}_y" in df_merged.columns:
