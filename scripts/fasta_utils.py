@@ -1,9 +1,11 @@
 import os
+import re
 import csv
 import requests
+from pdb_to_fasta import residue_to_one_letter
 from covalent_utils import get_link_atoms
 
-def fetch_fasta_from_pdb(pdb_id):
+def fetch_fasta(pdb_id):
     """
     Fetches and returns the header anad FASTA sequence(s) for a given PDB ID from RCSB PDB.
     """
@@ -14,6 +16,33 @@ def fetch_fasta_from_pdb(pdb_id):
         return response.text
     else:
         raise ValueError(f"Failed to fetch FASTA for PDB ID {pdb_id}: {response.status_code}")
+
+
+def build_sequence(pdb_file, chain_id):
+    """
+    Converts a PDB file to a sequence and gives the PDB idx of each residue as well as the literal index.
+
+    :param pdb_file: Path to PDB file.
+    :param records_csv: Path to CSV of CovalentInDB2.0 Database with information regarding positions of the covalent bond.
+
+    :return sequence: string of the protein sequence for the ligand interacting chain.
+    """
+
+    sequence = ''
+    with open(pdb_file, 'r') as pdb:
+        for line in pdb:
+            # Extract residue information from ATOM records
+            if line.startswith("ATOM") and line[13:15].strip() == "CA" and line[21:23].strip() == chain_id:
+
+                residue = line[17:20].strip()
+                res_name = residue_to_one_letter(residue)
+
+                res_idx = line[23:27].strip() # pdb assigned
+                res_idx = int(re.sub(r'[A-Za-z]', '', res_idx))
+                
+                sequence += res_name
+
+    return sequence 
 
 
 def read_csv_pdbs(csv_path='/home/ymanasa/turbo/ymanasa/opt/boltz/covalent_testing/cov_indb2.csv'):
@@ -43,7 +72,7 @@ def build_fasta_dict(pdb_list):
 
     for pdb in pdb_list:
         try:
-            fasta = fetch_fasta_from_pdb(pdb)
+            fasta = fetch_fasta(pdb)
             fasta_dict[pdb] = fasta
             print(pdb)
         except Exception as e:
@@ -55,7 +84,7 @@ def build_fasta_seq(pdb_id):
     """
     Returns fasta sequences of all chains as a single string which can be used as input for Boltz inference. 
     """
-    fasta = fetch_fasta_from_pdb(pdb_id)
+    fasta = fetch_fasta(pdb_id)
     list_fasta = fasta.split('\n')
     final_fasta = ''
     for i in list_fasta:

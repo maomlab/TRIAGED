@@ -4,6 +4,7 @@ import sys
 import subprocess
 # from pdb_to_fasta import pdb_to_fasta
 from fasta_utils import build_fasta_seq
+from fasta_utils import build_sequence
 from mmseqs2 import run_mmseqs2
 import argparse
 from covalent_utils import get_link_atoms
@@ -58,7 +59,8 @@ def ensure_environment_variables():
 def create_boltz_job(pdb_file, output_dir, csv_file=None, covalent_docking=False):
     """
     Creates directories with .yaml files based on the input CSV and PDB files.
-    :param csv_file: Path to the input CSV file. Not required for covalent docking. 
+    :param proj_dir: working directory for boltz.
+    :param csv_file: Path to the input CSV file. 
     :param pdb_file: Path to the input PDB file.
     :param output_dir: Path to the output directory.
     :param covalent_docking: Whether to write yaml for covalent docking. 
@@ -73,11 +75,10 @@ def create_boltz_job(pdb_file, output_dir, csv_file=None, covalent_docking=False
     if not os.path.isfile(pdb_file):
         print(f"Error: PDB file '{pdb_file}' does not exist.")
         sys.exit(1)
-    # Check if the CSV file exists only for non-covalent docking 
-    if not covalent_docking:
-        if not csv_file or not os.path.isfile(csv_file):
-            print(f"Error: CSV file '{csv_file}' does not exist.")
-            sys.exit(1)
+
+    if not csv_file or not os.path.isfile(csv_file):
+        print(f"Error: CSV file '{csv_file}' does not exist.")
+        sys.exit(1)
     
     # Convert PDB to FASTA
     project_dir = os.getenv("PROJECT_DIR", "/home/ymanasa/turbo/ymanasa/boltz_benchmark")
@@ -129,49 +130,50 @@ def create_boltz_job(pdb_file, output_dir, csv_file=None, covalent_docking=False
                     yaml.write("properties:\n")
                     yaml.write("  - affinity:\n")
                     yaml.write("      binder: B\n")
-    else:
-        if (result := get_link_atoms(pdb_file)) is not None: #unpack iterable if not NoneType object
-            prot_atom, res_name, res_idx, _, ccd, lig_atom, _ = get_link_atoms(pdb_file)
-        
+    else: # for covalent docking 
+        if (result := get_link_atoms(pdb_file, csv_file)) is not None: #unpack iterable if not NoneType object
+            prot_atom, res_name, res_idx, chain_name, ccd, lig_atom, _ = get_link_atoms(pdb_file, csv_file)
+            sequence = build_sequence(pdb_file, chain_name)
+            
             yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml")
-            if not os.path.exists(yaml_file):
-                with open(yaml_file, 'w') as yaml:
-                    yaml.write("version: 1\n")
-                    yaml.write("sequences:\n")
-                    yaml.write("  - protein:\n")
-                    yaml.write("      id: A\n")
-                    yaml.write(f"      sequence: {sequence}\n")
-                    # yaml.write(f"      msa: {msa_file}\n")
-                    yaml.write(f"      modification:\n")
-                    yaml.write(f"        - position: {res_idx}\n")
-                    yaml.write(f"          ccd: {res_name}\n")
+            # will overwrite existing yaml!! 
+            with open(yaml_file, 'w') as yaml:
+                yaml.write("version: 1\n")
+                yaml.write("sequences:\n") # seq is the only input into boltz 
+                yaml.write("  - protein:\n")
+                yaml.write("      id: A\n")
+                yaml.write(f"      sequence: {sequence}\n")
+                # yaml.write(f"      msa: {msa_file}\n")
+                yaml.write(f"      modification:\n")
+                yaml.write(f"        - position: {res_idx}\n")
+                yaml.write(f"          ccd: {res_name}\n")
 
-                    yaml.write("  - ligand:\n")
-                    yaml.write(f"      id: LIG\n")
-                    yaml.write(f"      ccd: '{ccd}'\n")
-                    
-                    yaml.write("constraints:\n")
-                    yaml.write("    - bond:\n")
-                    yaml.write(f"        atom1: [A, {res_idx}, {prot_atom}]\n") 
-                    yaml.write(f"        atom2: [LIG, 1, {lig_atom}]\n") # lig atm idx needs to be 1 regardless of PDB idx 
+                yaml.write("  - ligand:\n")
+                yaml.write(f"      id: LIG\n")
+                yaml.write(f"      ccd: '{ccd}'\n")
+                
+                yaml.write("constraints:\n")
+                yaml.write("    - bond:\n")
+                yaml.write(f"        atom1: [A, {res_idx}, {prot_atom}]\n") 
+                yaml.write(f"        atom2: [LIG, 1, {lig_atom}]\n") # lig atm idx needs to be 1 regardless of PDB idx 
 
-                    yaml.write("properties:\n")
-                    yaml.write("    - affinity:\n")
-                    yaml.write(f"        binder: LIG\n")
-        else: # if get_link_atom is None 
-            yaml_file = None # returns None
+                yaml.write("properties:\n")
+                yaml.write("    - affinity:\n")
+                yaml.write(f"        binder: LIG\n")
+        else: 
+            yaml_file = None 
     return yaml_file # path to yaml file 
 
 def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files.")
-    parser.add_argument("-i","--input_csv_file", type=str, required=False,help="Path to the input CSV file. Required for non-covalent docking.")
+    parser.add_argument("-i","--input_csv_file", type=str, required=False,help='''Path to the input CSV file. 
+                        For covalent docking, PDB ID, Covalent Residue Position, Chain Name, Residue Name columns are required by the names of 
+                        PDB, Resi_posi, Resi_chain, and Resi_name, respectively.''')
     parser.add_argument("-p","--input_pdb_file", type=str, required=True,help="Path to the input PDB file.")
     parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory.")
-    parser.add_argument("-c", "--covalent_docking", action='store_true', default=False,help="Whether ligand must covlanetly interact with protein")
+    parser.add_argument("-c", "--covalent_docking", action='store_true', default=False,help="Whether ligand must covlanetly interact with protein.")
 
     args = parser.parse_args()
-    if not args.covalent_docking and args.input_csv_file is None:
-        parser.error("--input_csv_file is required when --covalent_docking is False for non-covalent docking")
 
     create_boltz_job(csv_file=args.input_csv_file, pdb_file=args.input_pdb_file, output_dir=args.output_directory, covalent_docking=args.covalent_docking)
 
