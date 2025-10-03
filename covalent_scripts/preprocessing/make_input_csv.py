@@ -2,6 +2,7 @@ import os
 import csv
 import pandas as pd 
 import argparse
+import subprocess
 from pdb_to_fasta import residue_to_three_letter, build_sequence
 from covalent_utils import verify_covalent, residue_cov_atom, remove_leaving_group
 from covalent_utils import process_covalent_smiles
@@ -46,7 +47,7 @@ def process_protein(pdb, idx):
     res_name = residue_to_three_letter(res_aa)
 
     if verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
-        raise ValueError("The res_idx provided does NOT map to a covalent residue. " \
+        raise ValueError("[ERROR] The res_idx provided does NOT map to a covalent residue. " \
         "Please verify res_idx matches expected residue in sequence.")
     
     res_atom = residue_cov_atom(res_name)
