@@ -9,9 +9,9 @@ from rdkit import Chem
 # tested last: 9/25/25 in working/
 
 def ensure_environment_variables():
-    """
+    '''
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
-    """
+    '''
     setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
     
     command = f"bash -c 'source {setup_script} && env'"
@@ -63,13 +63,15 @@ def literal_list_representer(dumper, data):
 yaml.add_representer(LiteralList, literal_list_representer)
 
 def create_boltz_job(csv_file, output_dir):
-    """
+    '''
     Creates directories with .yaml files based on the input CSV.
-    :param csv_file: Path to the input CSV file. 
-    :param output_dir: Path to the output directory.
+    :param csv_file: str
+        Path to the input CSV file. 
+    :param output_dir: str
+        Path to the output directory.
 
     :return: path to last yaml file created
-    """
+    '''
     # Ensure environment variables are set
     ensure_environment_variables()
     ccd_db = os.getenv("CCD_DB", "/home/$USER/.bolts/mols") 
@@ -83,7 +85,7 @@ def create_boltz_job(csv_file, output_dir):
     
     # load csv and check columns
     csvfile = pd.read_csv(csv_file)
-    required_columns = {"Compound_ID", "SMILES", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"} # WH_Type can be an extra col
+    required_columns = {"Compound_ID", "SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"}
     missing = required_columns - set(csvfile.columns)
     if missing:
         print(f"[ERROR] CSV file is missing these columns: {missing}")
@@ -93,7 +95,7 @@ def create_boltz_job(csv_file, output_dir):
     yaml_files = []
     for _, row in csvfile.iterrows(): # per ligand yaml is made 
         # ligand info 
-        ccd = row["Compound_ID"]
+        ccd = row["CCD"]
         smiles = row["SMILES"]
         smiles = check_smiles(smiles, verbose=True) # returns conancial smiles or None
         if smiles is None:
@@ -103,7 +105,8 @@ def create_boltz_job(csv_file, output_dir):
         # check if ccd mol file exists
         ccd_file = os.path.join(ccd_db, f"{ccd}.pkl")
         if not os.path.isfile(ccd_file):
-            print(f"[ERROR] '{ccd_file}' does not exist for {ccd}. Please use preprocessing script to generate it.")
+            print(f"[ERROR] '{ccd_file}' does not exist for {ccd}. \
+                  Please use preprocessing script (/preprocessing/make_input_csv.py) to generate it.")
             invalid_compounds.append(ccd)
             continue
         lig_atom = row["Lig_Atom"] 
@@ -163,7 +166,7 @@ def create_boltz_job(csv_file, output_dir):
 def main():
     parser = argparse.ArgumentParser(description="Setup Boltz job directories and YAML files. Refer to README.md for csv format.")
     parser.add_argument("-i","--input_csv_file", type=str, required=True,help="Path to the input CSV file.")
-    parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory.")
+    parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory for generated yamls.")
 
     args = parser.parse_args()
 

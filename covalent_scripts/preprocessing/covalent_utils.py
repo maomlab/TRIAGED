@@ -68,12 +68,12 @@ def extract_entities(pdb_file, protein=True):
 
         output = os.path.join(os.path.dirname(pdb_file), f"{output_base}_prot.pdb")
         io.save(output, ProteinSelect())
-        print(f"Protein written to {output}")
+        print(f"[SUCCESS] Protein written to {output}")
 
     else: # ligand
         output = os.path.join(os.path.dirname(pdb_file), f"{output_base}_lig.pdb")
         io.save(output, LigandSelect())
-        print(f"Ligand written to {output}")
+        print(f"[SUCCESS] Ligand written to {output}")
 
     return output 
 
@@ -116,7 +116,7 @@ def get_conformer(mol, c_type: ConformerType):
             pass
 
     msg = f"Conformer {c_type.name} does not exist."
-    raise ValueError(msg)
+    raise ValueError("[ERROR] ", msg)
 
 
 ########################################################################
@@ -223,7 +223,7 @@ def convert_pdbIDX_boltzIDX(pdb_file, records_csv):
     if len(mapped_idx) == 1:
         return mapped_idx[0][-1]
     else: 
-        print(f'more than one matching residue found for {pdb_file}')
+        print(f'[WARNING] More than one matching residue found for {pdb_file}')
 
 def get_link_atoms(parent_file, records_csv):
     '''
@@ -279,7 +279,7 @@ def get_link_atoms(parent_file, records_csv):
                         lig_atom = line[13:17].strip()
                         lig_idx = line[23:27].strip() # ?not needed?
                         return prot_atom, res_name, res_idx, chain_name, ccd, lig_atom, lig_idx
-    print(f"Warning: LINK record not present or no valid ligand found in PDB, {parent_file}")
+    print(f"[WARNING] LINK record not present or no valid ligand found in PDB, {parent_file}")
     return None
 
 ##################################################################################
@@ -335,7 +335,7 @@ def unique_ccd(length=5, max_attempts=10, ccd_db="/home/ymanasa/.bolts/mols"):
         ccd = ''.join(random.choices(chars, k=length))
         if not os.path.exists(f"{ccd_db}/{ccd}.pkl"):
             return ccd
-    raise RuntimeError("Could not find an available CCD after max attempts.")
+    raise RuntimeError("[ERROR] Could not find an available CCD after max attempts.")
 
 def process_covalent_smiles(smiles, ccd_db="/home/ymanasa/.boltz/mols"):
     '''
@@ -353,7 +353,7 @@ def process_covalent_smiles(smiles, ccd_db="/home/ymanasa/.boltz/mols"):
 
     success = compute_3d(mol_sdf)
     if not success:
-        raise ValueError("3D coordinate generation failed for the provided SMILES.")
+        raise ValueError("[ERROR] 3D coordinate generation failed for the provided SMILES.")
     _ = get_conformer(mol_sdf, ConformerType.Computed)
 
     for i, atom in enumerate(mol_sdf.GetAtoms()):
@@ -379,7 +379,7 @@ def identify_warhead(smiles):
 
     mol = Chem.MolFromSmiles(smiles)
     if not mol:
-        print("Invalid SMILES string.")
+        print("[ERROR] Invalid SMILES string.")
         return []
         
     found_warheads = []
@@ -388,9 +388,9 @@ def identify_warhead(smiles):
             found_warheads.append(name)
 
     if len(found_warheads) > 1:
-        print("More than 1 warhead found. Choosing first match.")
+        print("[WARNING] More than 1 warhead found. Choosing first match.")
     elif len(found_warheads) == 0:
-        raise ValueError('No matching warhead was found.')
+        raise ValueError('[ERROR] No matching warhead was found.')
         
     return found_warheads[0]
 
@@ -408,7 +408,7 @@ def ligand_cov_atom(no_lg_smiles):
     mol = Chem.MolFromSmiles(no_lg_smiles)
 
     if not mol:
-        print("Error: Invalid SMILES string provided.")
+        print("[ERROR] Invalid SMILES string provided.")
         return -1
 
     for atom in mol.GetAtoms():
@@ -446,8 +446,8 @@ def remove_leaving_group(smiles):
     lig_atom = ligand_cov_atom(smi_no_lg)
     smi_no_c13 = smi_no_lg.replace("13", "")
 
-    print('leaving group removed:', smi_no_c13)
-    
+    print('[SUCCESS] Leaving group removed:', smi_no_c13)
+
     return smi_no_c13, lig_atom, wh_type
     
 def verify_covalent(res_name):

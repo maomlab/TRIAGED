@@ -1,6 +1,13 @@
+
 import os
 import re
 import csv
+import random
+import string
+import pickle
+import rdkit
+from rdkit import Chem
+from rdkit.Chem import AllChem
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -8,6 +15,7 @@ from Bio import PDB
 from Bio.PDB import PDBParser, Superimposer
 from pdb_to_fasta import residue_to_one_letter
 from rdkit.Chem import CombineMols, rdMolTransforms
+from pdbeccdutils.core.component import ConformerType # might need to use ccd_pkl env to run this 
 
 class ProteinSelect(PDB.Select):
     def accept_residue(self, residue):
@@ -64,21 +72,21 @@ def extract_entities(pdb_file, protein=True):
     return output 
     
 
-# def find_atom_index(mol, atom_name, res_num):
-#     """
-#     Finds the atom index in an RDKit molecule given the atom name and residue number.
-#     Args:
-#         mol (rdkit.Chem.rdchem.Mol): RDKit molecule object (typically from a PDB).
-#         atom_name (str): The name of the atom (e.g., "SG", "C8").
-#         res_num (int): The residue number in the PDB (e.g., 25 for protein, 301 for ligand).
-#     Returns:
-#         int or None: The atom index in the molecule if found, otherwise None.
-#     """
-#     for atom in mol.GetAtoms():
-#         info = atom.GetPDBResidueInfo()
-#         if info and info.GetResidueNumber() == res_num and info.GetName().strip() == atom_name:
-#             return atom.GetIdx() # rdkit_idx 
-#     return None
+def find_atom_index(mol, atom_name, res_num):
+    """
+    Finds the atom index in an RDKit molecule given the atom name and residue number.
+    Args:
+        mol (rdkit.Chem.rdchem.Mol): RDKit molecule object (typically from a PDB).
+        atom_name (str): The name of the atom (e.g., "SG", "C8").
+        res_num (int): The residue number in the PDB (e.g., 25 for protein, 301 for ligand).
+    Returns:
+        int or None: The atom index in the molecule if found, otherwise None.
+    """
+    for atom in mol.GetAtoms():
+        info = atom.GetPDBResidueInfo()
+        if info and info.GetResidueNumber() == res_num and info.GetName().strip() == atom_name:
+            return atom.GetIdx() # rdkit_idx 
+    return None
 
 def ccd_is_ligand(ccd):
     """
@@ -360,6 +368,125 @@ def get_dihedral(combined, conf, atomB_idx, atomC_idx):
     
     #dihedral
     return rdMolTransforms.GetDihedralDeg(conf, atom_A_idx, atomB_idx, atomC_idx, atom_D_idx)
+
+def get_conformer(mol, c_type: ConformerType):
+    ''' 
+    Retrieve an rdkit object for a deemed conformer.
+    Taken from `pdbeccdutils.core.component.Component`.
+    :param mol: Mol
+        The molecule to process.
+    :param c_type: ConformerType
+        The conformer type to extract.
+    :return: Conformer
+        The desired conformer, if any.
+    '''
+    for c in mol.GetConformers():
+        try:
+            if c.GetProp("name") == c_type.name:
+                return c
+        except KeyError:  # noqa: PERF203
+            pass
+
+    msg = f"Conformer {c_type.name} does not exist."
+    raise ValueError(msg)
+
+def compute_3d(mol) -> bool:
+    '''Generate 3D coordinates using EKTDG method.
+    Taken from `pdbeccdutils.core.component.Component`.
+    :param mol: Mol
+        The RDKit molecule to process
+    :return: bool 
+        Whether computation was successful.
+    '''
+    options = rdkit.Chem.AllChem.ETKDGv3()
+    options.clearConfs = False
+    conf_id = -1
+
+    try:
+        conf_id = rdkit.Chem.AllChem.EmbedMolecule(mol, options)
+        rdkit.Chem.AllChem.UFFOptimizeMolecule(mol, confId=conf_id, maxIters=1000)
+
+    except RuntimeError:
+        pass  # Force field issue here
+    except ValueError:
+        pass  # sanitization issue here
+
+    if conf_id != -1:
+        conformer = mol.GetConformer(conf_id)
+        conformer.SetProp("name", ConformerType.Computed.name)
+        conformer.SetProp("coord_generation", f"ETKDGv3")
+        
+        return True
+    return False
+
+def unique_ccd(length=5, max_attempts=10, ccd_db="/home/ymanasa/.bolts/mols"):
+    '''Generates a unique alphanumeric string of specified length and ensures uniqueness.'''
+    chars = string.ascii_uppercase + string.digits
+
+    for _ in range(max_attempts):
+        ccd = ''.join(random.choices(chars, k=length))
+        if not os.path.exists(f"{ccd_db}/{ccd}.pkl"):
+            return ccd
+    raise RuntimeError("Could not find an available CCD after max attempts.")
+
+def process_covalent_smiles(smiles, ccd_db="/home/ymanasa/.bolts/mols"):
+    '''
+    Creates a covalent CCD ligand from a conanical SMILES string using Rdkit.
+    :param smiles (str): Sanitized canonical SMILES string of the covalent ligand.
+    :param ccd_db (str): Path to the CCD database directory where .pkl files are stored.
+    :return (str): Unique CCD code for the covalent ligand.
+    '''
+    mol_sdf = Chem.MolFromSmiles(smiles) 
+
+    success = compute_3d(mol_sdf)
+    if not success:
+        raise ValueError("3D coordinate generation failed for the provided SMILES.")
+    _ = get_conformer(mol_sdf, ConformerType.Computed)
+
+    for i, atom in enumerate(mol_sdf.GetAtoms()):
+        atom_id = atom.GetSymbol()+ str(atom.GetIdx())
+        atom.SetProp("name", atom_id)
+    
+    Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
+    ccd = unique_ccd(ccd_db=ccd_db)
+    with open(f"{ccd_db}/{ccd}.pkl", "wb") as f:
+        pickle.dump(mol_sdf, f)
+    return ccd
+
+def remove_lg(smiles, warhead_type, smarts_rxns="SMARTS.csv"):  
+
+    mol = Chem.MolFromSmiles(smiles)
+    with open(smarts_rxns, 'r') as csv:
+        reader = csv.DictReader(csv)
+        for row in reader:
+            if warhead_type == row["warhead_type"]:
+                rxn = AllChem.ReactionFromSmarts(row["SMARTS"])
+                try:
+                    products = rxn.RunReactants((mol,))
+
+                    for prod_tuple in products:
+                        for prod in prod_tuple:
+                            smi_no_lg = Chem.MolToSmiles(prod)
+                     
+                    return smi_no_lg
+                except: 
+                    raise ValueError("Reaction could not be applied to the given SMILES.")
+
+    # use SMARTS to identify warhead and leaving group 
+    # make new file with SMARTS reactions and map to warheads 
+    # define warheads and patterns in README 
+    # identify covalent atom as well dependening on warhead type
+    # lig_atom just needs to index and see which atom is covaolently interating after leaving group is removed 
+    # return lig_atom
+
+   
+def get_prot_atom(res_name):
+    # given res name, return which atom is covalent 
+    # have a dict with standard covalent residues and their covalent atom types
+    pass 
+
+def get_lig_atom():
+    pass 
 
 # testing
 # get_link_atoms('/home/ymanasa/turbo/ymanasa/opt/boltz/covalent_testing/boltz_infer/6WVO/6WVO.pdb', '/home/ymanasa/turbo/ymanasa/opt/boltz/covalent_testing/records/records_test.csv')
