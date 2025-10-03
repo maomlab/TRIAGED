@@ -390,7 +390,7 @@ def identify_warhead(smiles):
     if len(found_warheads) > 1:
         print("[WARNING] More than 1 warhead found. Choosing first match.")
     elif len(found_warheads) == 0:
-        raise ValueError('[ERROR] No matching warhead was found.')
+        raise ValueError(f'[ERROR] No matching warhead was found for {smiles}')
         
     return found_warheads[0]
 
