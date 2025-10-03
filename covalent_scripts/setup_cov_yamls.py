@@ -63,7 +63,7 @@ def literal_list_representer(dumper, data):
     return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
 yaml.add_representer(LiteralList, literal_list_representer)
 
-def create_boltz_job(csv_file, output_dir):
+def create_boltz_yamls(csv_file, output_dir):
     '''
     Creates directories with .yaml files based on the input CSV.
     :param csv_file: str
@@ -171,7 +171,7 @@ def main():
 
     args = parser.parse_args()
 
-    create_boltz_job(csv_file=args.input_csv_file, output_dir=args.output_directory)
+    create_boltz_yamls(csv_file=args.input_csv_file, output_dir=args.output_directory)
 
 if __name__ == "__main__":
     main()

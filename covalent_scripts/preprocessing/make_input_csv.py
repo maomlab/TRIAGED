@@ -7,6 +7,9 @@ from pdb_to_fasta import residue_to_three_letter, build_sequence
 from covalent_utils import verify_covalent, residue_cov_atom, remove_leaving_group
 from covalent_utils import process_covalent_smiles
 
+# tested last: 10/03/25 in test/
+# use ccd_pkl env
+
 def ensure_environment_variables():
     '''
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
