@@ -11,7 +11,7 @@ def ensure_environment_variables():
     '''
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
     '''
-    setup_script = os.path.join(os.path.dirname(__file__), "setup_enviorment.sh")
+    setup_script = os.path.join(os.path.dirname(__file__), "../setup_enviorment.sh")
     
     command = f"bash -c 'source {setup_script} && env'"
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash")
@@ -53,12 +53,12 @@ def process_protein(pdb, idx):
     res_atom = residue_cov_atom(res_name)
     return sequence, res_name, res_atom
 
-def generate_csv(prot_file, res_idx, lig_csv, out_csv, ccd_db):
+def generate_csv(name, prot_file, res_idx, lig_csv, out_csv, ccd_db):
     '''Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking.'''
     
     validate_file(prot_file) # check if either txt or pdb
     ensure_environment_variables()
-    ccd_db = os.getenv("CCD_DB", "/home/$USER/.bolts/mols")
+    ccd_db = os.getenv("CCD_DB")
     
     with open(lig_csv, 'r') as lig:
         reader = csv.reader(lig)
@@ -86,21 +86,22 @@ def generate_csv(prot_file, res_idx, lig_csv, out_csv, ccd_db):
             id = lig[0]
             smiles_no_lg, lig_atom, wh_type = remove_leaving_group(lig[1])
             ccd = process_covalent_smiles(smiles_no_lg, ccd_db=ccd_db) # makes pkl file 
-            writer.writerow([id, smiles_no_lg, ccd, wh_type, lig_atom, seq, res_name, str(res_idx), res_atom])
+            writer.writerow([id, smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, res_name, str(res_idx), res_atom])
         
 def main():
     parser = argparse.ArgumentParser(description="Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking. " \
                                      "Processes ligands and makes required files for Boltz2." \
                                      "Assumes one protein target. Consult README for input format inforamtion.")
+    parser.agg_argument("-n", "--name", type=str, required=True, help="Name of protein. Used for naming output files.")
     parser.add_argument("-p","--prot_file", type=str, required=True, help="Path to either a PDB file or a TXT file with a single chain sequence.")
     parser.add_argument("-r", "--res_idx", type=int, required=True, help="Index of the residue to be covalently targeted by a covalent ligand. Starting at 1.")
     parser.add_argument("-l","--lig_csv", type=str, required=True, help="Path to CSV with Ligand info.")
     parser.add_argument("-o","--out_csv", type=str, required=True, help="Path to output CSV. Will be formatted to work with setup_cov_job.py.")
-    parser.add_argument("-c","--ccd_db", type=str, required=True, help="Path to directory with covalent compound pkl files. Default: /home/$USER/.boltz/mols")
+    parser.add_argument("-c","--ccd_db", type=str, required=True, help="Path to directory with covalent compound pkl files", default="/home/ymanasa/.boltz/mols")
 
     args = parser.parse_args()
 
-    generate_csv(args.prot_file, args.res_idx, args.lig_csv, args.out_csv)
+    generate_csv(args.name, args.prot_file, args.res_idx, args.lig_csv, args.out_csv, args.ccd_db)
 
 if __name__ == "__main__":
     main()
