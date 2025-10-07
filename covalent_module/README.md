@@ -5,10 +5,9 @@ Environment required: ccd_pkl and boltz2 (need to upload yaml of the environemnt
 The following are scripts to run inference with Boltz2 for covalent ligands on covalent proteins. 
 The main script, `submit_jobs.py`, is written to support SLURM job management on GreatLakes clusters. 
 
-### `covalent_scripts/submit_jobs.py`
-
+### `covalent_module/submit_jobs.py`
 Run predictions in command-line from the project directory (eg. `TRIAGED/`):
-    `python -m covalent_scripts.submit_jobs [OPTIONS]`
+    `python -m covalent_module.submit_jobs [OPTIONS]`
 
 #### Input Format
 | Argument               | Type    | Required | Description                                                                                                    |
@@ -17,16 +16,23 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
 | `--prot_file`     | `str`   | Yes      | Path to either a PDB file or a TXT file with a single chain sequence. Do not include any headers.                                                                                                       |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided.                                                       |         
 | `--lig_chain`.    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
-| `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers with rows `Compound ID,SMILES`. |
+| `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers with `Compound ID,SMILES` information in rows. |
 | `--outdir`       | `str`    | Yes      | Main output directory for all jobs. |
 | `--ccd_db`       | `str`    | No      | Path to output CSV. Will be formatted to work with setup_cov_job.py. Path to directory with covalent compound pkl files. Default: `/home/$USER/.boltz/mols`.        |
-| `--slurm`         | `str`    | No        | Path to SLURM template file. Default: `covalent_scripts/covalent_slurm.sh` |
+| `--slurm`         | `str`    | No        | Path to SLURM template file. Default: `covalent_module/covalent_slurm.sh` |
+
+#### Example Usage
+``` bash
+python -m covalent_module.submit_jobs -n 5MAJ -p covalent_module/example_input/5MAJ.pdb -r 25 -c A -l covalent_module/example_input/test_ligs.csv -o covalent_module/test/
+```
+
+Examples of run input can be found in `covalent_module/example_input`
+Examples of run output can be found in `covalent_module/test`
 
 ## Input Preprocessing for Covalent Inference
-
 ### `preprocessing/make_input_csv.py`
 
-This script sets up a CSV file with necessary information regarding the ligand and protein for writing `.yaml` files using `submit_jobs.py` for covalent docking with Boltz2. Also creates `.pkl` files necessary for docking in default location: `/home/$USER/.boltz/mols/`.
+This script sets up a CSV file with necessary information regarding the ligand and protein for writing `.yaml` files using `submit_jobs.py` for covalent docking with Boltz2. Also creates `.pkl` files necessary for docking in default location: `/home/$USER/.boltz/mols/`. `submit_jobs.py` will not work withouth the necessary `.pkl` files and accurately formated CSV for inference. The CCD ID generated when making the `.pkl` files MUST match CCD IDs assigned within the CSV file for inference with `covalent_module/submit_jobs.py`.
 
 #### Command-Line Arguments 
 
@@ -45,38 +51,6 @@ For a single protein and several ligands:
 ```bash
 python preprocessing/make_input_csv.py --name 5MAJ --prot_file test/5MAJ.pdb --res_idx 25 --lig_chain A --lig_csv test/test_ligs.csv --out_csv test/test_out.csv --ccd_db /home/ymanasa/.boltz/mols
 ```
-Find example input & output files in `preprocessing/test/*`
-
-
-### `submit_jobs.py`
-
-Makes .yamls needed for covalent docking with Boltz2 and submits an array of jobs with Slurm scripts. 
-
-#### Command-Line Arguments
-
-
-
-
-#### Example Usage
-For a single protein and several ligands:
-```bash
-python setup_cov_job.py --input_csv_file /path/to/input.csv --output_directory /path/to/output_directory
-```
-
-
-
-Scripts to populate your columns with appropriate information can be found in `preprocessing/`. Without the correct covalent information, Boltz will not run! 
-
-### `setup_cov_yamls.py`
-
-This script generates `.yaml` files based on the input CSV, suitable for covalent docking with Boltz2. This does not need to be run seperately if `submit_jobs.py` is run directly with the appropriate inputs. The specific format required as input is listed below.
-
-#### Command-Line Arguments 
-
-| Argument               | Type    | Required | Description                                                                                                    |
-|------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-| `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file. MUST have these columns: Compound_ID, SMILES, CCD, WH_Type, Lig_Atom, Prot_ID, Prot_Seq, Res_Idx, Res_Name, Res_Atom. Look at `Input CSV Requirements` for more info.                                                                                                          |
-| `--output_directory`   | `int`   | Yes      | Path to the output directory for generated yamls.                                                                                                         |
 
 #### Input CSV Requirements
 For coavlent docking, the input CSV file must contain the following columns: 
@@ -91,9 +65,4 @@ For coavlent docking, the input CSV file must contain the following columns:
 - `Res_Atom`: Name of the atom in residue involved in the covalent bond. 
 - `Prot_Seq`: Sequence of protein that matches indexing for res_idx.
 
-#### Example Usage
-```bash
-python python setup_cov_job.py --input_csv_file preprocessing/test/test_out.csv --output_directory test_yamls/
-```
-Find example of input file in `preprocessing/test/*`
-Fine example of output files in `test_yamls/`
+Example inputs can be found in `covalent_module/example_input/` and output CSV example is: `covalent_module/test/generated_test_ligs_5MAJ.csv`.

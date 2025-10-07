@@ -13,7 +13,7 @@ def ensure_environment_variables():
     '''
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
     '''
-    setup_script = os.path.join(os.path.dirname(__file__), "/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_scripts/setup_enviorment.sh")
+    setup_script = os.path.join(os.path.dirname(__file__), "/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/setup_enviorment.sh")
     
     command = f"bash -c 'source {setup_script} && env'"
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash")

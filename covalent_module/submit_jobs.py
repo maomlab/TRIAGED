@@ -2,13 +2,13 @@ import os
 import shutil
 import subprocess
 import argparse
-from covalent_scripts.preprocessing import make_input_csv 
-from covalent_scripts.preprocessing import setup_cov_yamls
+from covalent_module.preprocessing import make_input_csv 
+from covalent_module.preprocessing import setup_cov_yamls
 
 # ccd_pkl conda env 
-# testing last: 10/06/25 
+# last tested: 10/06/25 
 
-def run(name, prot_file, res_idx, lig_chain, lig_csv, outdir, ccd_db="/home/ymanasa/.boltz/mols", slurm_template="covalent_scripts/covalent_slurm.sh"):
+def run(name, prot_file, res_idx, lig_chain, lig_csv, outdir, ccd_db="/home/ymanasa/.boltz/mols", slurm_template="covalent_module/covalent_slurm.sh"):
     os.makedirs(outdir, exist_ok=True)
 
     # generate csv for yaml building
@@ -56,7 +56,7 @@ def main():
     parser.add_argument("-c", "--lig_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
     parser.add_argument("-l","--lig_csv", type=str, required=True, help="Path to CSV with Ligand info.")
     parser.add_argument("-o","--outdir", type=str, required=True, help="Output directory for all jobs.")
-    parser.add_argument("-s","--slurm", type=str, required=False, help="Path to SLURM template file.", default="covalent_scripts/covalent_slurm.sh")
+    parser.add_argument("-s","--slurm", type=str, required=False, help="Path to SLURM template file.", default="covalent_module/covalent_slurm.sh")
     parser.add_argument("-db","--ccd_db", type=str, required=False, help="Path to directory with covalent compound pkl files", default="/home/ymanasa/.boltz/mols")
     args=parser.parse_args()
     run(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_chain=args.lig_chain, lig_csv=args.lig_csv, outdir=args.outdir, ccd_db=args.ccd_db, slurm_template=args.slurm)
