@@ -1,0 +1,23 @@
+sequences:
+-   protein:
+        id: A
+        sequence: APRSVDWREKGYVTPVKNQGQCGSCWAFSATGALEGQMFRKTGRLISLSEQNLVDCSGPQGNEGCNGGLMDYAFQYVQDNGGLDSEESYPYEATEESCKYNPKYSVANDTGFVDIPKQEKALMKAVATVGPISVAIDAGHESFLFYKEGIYFEPDCSSEDMDHGVLVVGYGFESTSDNNKYWLVKNSWGEEWGMGGYVKMAKDRRNHCGIASAASYPTV
+        modification:
+        -   position: 25
+            ccd: CYS
+-   ligand:
+        id: LIG
+        ccd: 4XW07
+constraints:
+-   bond:
+        atom1:
+        - A
+        - 25
+        - SG
+        atom2:
+        - LIG
+        - 1
+        - C25
+properties:
+-   affinity:
+        binder: LIG

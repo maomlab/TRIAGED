@@ -3,9 +3,9 @@ import csv
 import pandas as pd 
 import argparse
 import subprocess
-from pdb_to_fasta import residue_to_three_letter, build_sequence
-from covalent_utils import verify_covalent, residue_cov_atom, remove_leaving_group
-from covalent_utils import process_covalent_smiles
+from .pdb_to_fasta import residue_to_three_letter, build_sequence
+from .covalent_utils import verify_covalent, residue_cov_atom, remove_leaving_group
+from .covalent_utils import process_covalent_smiles
 
 # tested last: 10/03/25 in test/
 # use ccd_pkl env
@@ -36,17 +36,22 @@ def validate_file(filename):
     else:
         return ext
 
-def process_protein(pdb, idx):
+def process_protein(pdb, idx, lig_chain):
     '''Returns protein information.'''
     ext = validate_file(pdb)
     if ext==".pdb":
-        sequence = build_sequence(pdb)
+        sequence = build_sequence(pdb, lig_chain)
     else: # txt with sequence
         with open(pdb, 'r') as f:
             content = f.read()
             sequence = "".join(content.split())
+    if idx < 1:
+        idx = 0
+    elif idx > len(sequence):
+        raise ValueError(f"[ERROR] res_idx {idx} exceeds sequence length {len(sequence)}.")
+    else:
+        res_aa = sequence[idx-1]
 
-    res_aa = sequence[idx]
     res_name = residue_to_three_letter(res_aa)
 
     if verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
@@ -56,7 +61,7 @@ def process_protein(pdb, idx):
     res_atom = residue_cov_atom(res_name)
     return sequence, res_name, res_atom
 
-def generate_csv(name, prot_file, res_idx, lig_csv, out_csv, ccd_db):
+def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
     '''Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking.'''
     
     validate_file(prot_file) # check if either txt or pdb
@@ -67,7 +72,11 @@ def generate_csv(name, prot_file, res_idx, lig_csv, out_csv, ccd_db):
         reader = csv.reader(lig)
         ligands = [(row[0], row[1]) for row in reader if row]  # gives [("lig1", "SMILES1"), ("lig2", "SMILES2"), ...]
 
-    seq, res_name, res_atom = process_protein(prot_file, res_idx)
+    seq, res_name, res_atom = process_protein(prot_file, res_idx, lig_chain)
+
+    if os.path.exists(out_csv):
+        print(f"[WARNING] Output CSV '{out_csv}' already exists. Deleting and rewriting.")
+        os.remove(out_csv)
 
     expected_header = ["Compound_ID", "SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
     # writing header if needed
@@ -81,7 +90,6 @@ def generate_csv(name, prot_file, res_idx, lig_csv, out_csv, ccd_db):
 
     with open(out_csv, 'a') as f:
         writer = csv.writer(f)
-
         if write_header:
             writer.writerow(expected_header)
         # for each ligand, append the protein information, assuming one protein target 
@@ -89,7 +97,7 @@ def generate_csv(name, prot_file, res_idx, lig_csv, out_csv, ccd_db):
             id = lig[0]
             smiles_no_lg, lig_atom, wh_type = remove_leaving_group(lig[1])
             ccd = process_covalent_smiles(smiles_no_lg, ccd_db=ccd_db) # makes pkl file 
-            writer.writerow([id, smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, res_name, str(res_idx), res_atom])
+            writer.writerow([id, smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
         
 def main():
     parser = argparse.ArgumentParser(description="Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking. " \
@@ -98,13 +106,13 @@ def main():
     parser.agg_argument("-n", "--name", type=str, required=True, help="Name of protein. Used for naming output files.")
     parser.add_argument("-p","--prot_file", type=str, required=True, help="Path to either a PDB file or a TXT file with a single chain sequence.")
     parser.add_argument("-r", "--res_idx", type=int, required=True, help="Index of the residue to be covalently targeted by a covalent ligand. Starting at 1.")
+    parser.add_argument("-g", "--lig_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
     parser.add_argument("-l","--lig_csv", type=str, required=True, help="Path to CSV with Ligand info.")
     parser.add_argument("-o","--out_csv", type=str, required=True, help="Path to output CSV. Will be formatted to work with setup_cov_job.py.")
     parser.add_argument("-c","--ccd_db", type=str, required=True, help="Path to directory with covalent compound pkl files", default="/home/ymanasa/.boltz/mols")
 
     args = parser.parse_args()
-
-    generate_csv(args.name, args.prot_file, args.res_idx, args.lig_csv, args.out_csv, args.ccd_db)
+    generate_csv(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_csv=args.lig_csv, out_csv=args.out_csv, ccd_db=args.ccd_db)
 
 if __name__ == "__main__":
     main()

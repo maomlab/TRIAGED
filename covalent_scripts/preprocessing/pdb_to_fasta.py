@@ -1,20 +1,21 @@
 import sys
 import re 
 
-def build_sequence(pdb_file):
+def build_sequence(pdb_file, lig_chain):
     """
     Converts a PDB file to a sequence.
 
     :param pdb_file: Path to PDB file.
+    :param lig_chain: Chain interacting with ligand.
 
-    :return sequence: string of the protein sequence for the ligand interacting chain.
+    :return sequence: string of the protein sequence for ligand interacting chain.
+    NOTE: Does not handle multiple chain interactions for now.
     """
-
     sequence = ''
     with open(pdb_file, 'r') as pdb:
         for line in pdb:
             # Extract residue information from ATOM records
-            if line.startswith("ATOM") and line[13:15].strip() == "CA":
+            if line.startswith("ATOM") and line[13:15].strip() == "CA" and line[21:23].strip() == lig_chain and line[16:17].strip() != 'B':
 
                 residue = line[17:20].strip()
                 res_name = residue_to_one_letter(residue)

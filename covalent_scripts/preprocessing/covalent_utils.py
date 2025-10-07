@@ -12,7 +12,7 @@ import pandas as pd
 from pathlib import Path
 from Bio import PDB
 from Bio.PDB import PDBParser, Superimposer
-from pdb_to_fasta import residue_to_one_letter
+from .pdb_to_fasta import residue_to_one_letter
 from rdkit.Chem import CombineMols, rdMolTransforms
 from pdbeccdutils.core.component import ConformerType # might need to use ccd_pkl env to run this 
 
