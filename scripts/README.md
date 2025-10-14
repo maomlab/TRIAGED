@@ -7,13 +7,12 @@ This script sets up Boltz job directories and generates `.yaml` files based on t
 
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-| `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information. Not required when covalent docking.               |
+| `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information.              |
 | `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
 | `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |
 | `--num_jobs`           | `int`   | No       | How may parallel submission directories and slurm submit scripts to generate depending on avaliable gpus      |
 | `--protein_nmers`      | `int`   | No       | How many subunits to model the receptor if it is a multimer                                                   |
-| `--covalent_docking`   | `bool`  | No       | Whether ligand must covlanetly interact with protein.                                                         |
 
 #### Example Usage
 
@@ -44,20 +43,12 @@ python setup_boltz_job.py -i ../input_files/activity_data/kcnq_compounds.csv -f 
 The input CSV file must contain the following columns:
 - `compound_id`: Unique identifier for the compound.
 - `SMILES`: SMILES string representing the compound structure.
-For covalent ligand docking, do NOT use an input CSV. Only povide input pdb file and output directory paths. 
-Covalent docking by boltz is currently only supported for CCD ligands. 
 
 #### Output
-For non-covalent docking:
 - `.a3m` MSA files are pregenerated using the mmseqs2 server, you do not need to have --use-msa-server flag in boltz
 - `.yaml` files are created in the specified output directory, one for each compound in the CSV file.
 - The protein sequence is extracted from the PDB file and included in the `.yaml` files.
 
-For covalent docking: 
-You MUST use the --use-msa-server flag when running boltz for covalent docking. 
-- `.yaml` files are created in the specified output directory
-- The protein sequence is extracted from the PDB file and included in the `.yaml` files.
-- The atoms involved the covalent bonds between ligand and covalent residue are found and included in the `.yaml` files. User input to indicate position of the bond is not required.
 ---
 ## SLURM job scripts 
 ### slurm_run_boltz.sh
@@ -70,14 +61,6 @@ to the generated input directories. By default these scripts will be generated i
 ```bash
 sbatch slurm_run_boltz.sh
 ```
-
-### covalent_jobs.py
-
-This script helps setup ...
-
-### covalent_slurm.sh 
-
-...
 
 ---
 
