@@ -1,5 +1,6 @@
 # Covalent Boltz2 Inference
 Environment required: ccd_pkl and boltz2 (need to upload yaml of the environemnt after testing)
+Environment requied to run `submit_jobs.py` is ccd_pkl 
 ## Running Inference
 
 The following are scripts to run inference with Boltz2 for covalent ligands on covalent proteins. 
@@ -16,7 +17,7 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
 | `--prot_file`     | `str`   | Yes      | Path to either a PDB file or a TXT file with a single chain sequence. Do not include any headers.                                                                                                       |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided.                                                       |         
 | `--lig_chain`.    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
-| `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers with `Compound ID,SMILES` information in rows. |
+| `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers with `Compound ID,SMILES`. |
 | `--outdir`       | `str`    | Yes      | Main output directory for all jobs. |
 | `--ccd_db`       | `str`    | No      | Path to output CSV. Will be formatted to work with setup_cov_job.py. Path to directory with covalent compound pkl files. Default: `/home/$USER/.boltz/mols`.        |
 | `--slurm`         | `str`    | No        | Path to SLURM template file. Default: `covalent_module/covalent_slurm.sh` |

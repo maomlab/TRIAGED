@@ -63,19 +63,21 @@ def literal_list_representer(dumper, data):
     return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
 yaml.add_representer(LiteralList, literal_list_representer)
 
-def create_boltz_yamls(csv_file, output_dir):
+def create_boltz_yamls(csv_file, output_dir, msa=None):
     '''
     Creates .yaml files based on the input CSV.
     :param csv_file: str
         Path to the input CSV file. 
     :param output_dir: str
         Path to the output directory.
+    :param msa_path: str or None
+        Optional path to MSA file in a3m format. If provided, will be added to yaml.
 
     :return: path to last yaml file created
     '''
     # Ensure environment variables are set
     ensure_environment_variables()
-    ccd_db = os.getenv("CCD_DB", "/home/$USER/.bolts/mols") 
+    ccd_db = os.getenv("CCD_DB") 
 
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
@@ -86,7 +88,7 @@ def create_boltz_yamls(csv_file, output_dir):
     
     # load csv and check columns
     csvfile = pd.read_csv(csv_file)
-    required_columns = {"Compound_ID", "SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"}
+    required_columns = {"SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"}
     missing = required_columns - set(csvfile.columns)
     if missing:
         print(f"[ERROR] CSV file is missing these columns: {missing}")
@@ -103,7 +105,7 @@ def create_boltz_yamls(csv_file, output_dir):
             print(f"Invalid SMILES for compound ID {ccd}: {row['SMILES']}")
             invalid_compounds.append(ccd)
             continue
-        # check if ccd mol file exists
+        # check if ccd pkl file exists
         ccd_file = os.path.join(ccd_db, f"{ccd}.pkl")
         if not os.path.isfile(ccd_file):
             print(f"[ERROR] '{ccd_file}' does not exist for {ccd}. \
@@ -119,17 +121,18 @@ def create_boltz_yamls(csv_file, output_dir):
         res_name = row["Res_Name"]
         prot_atom = row["Res_Atom"]
 
+        protein_data = {
+            "id": "A",
+            "sequence": sequence,
+            "modification": [{"position": int(res_idx), "ccd": res_name}],
+        }
+
+        if msa is not None:
+            protein_data["msa"] = msa
+
         data = {
             "sequences": [
-                {
-                    "protein": {
-                        "id": "A",
-                        "sequence": sequence,
-                        "modification": [
-                            {"position": int(res_idx), "ccd": res_name}
-                        ],
-                    }
-                },
+                {"protein": protein_data},
                 {"ligand": {"id": "LIG", "ccd": str(ccd)}},
             ],
             "constraints": [
@@ -147,7 +150,8 @@ def create_boltz_yamls(csv_file, output_dir):
         yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml") # should be unique for each ligand
         with open(yaml_file, "w") as f:
             yaml.safe_dump(
-                data, f,
+                data, 
+                f,
                 sort_keys=False,
                 indent=4,
                 width=4096,  # prevents wrapping long strings
@@ -167,6 +171,7 @@ def main():
     parser = argparse.ArgumentParser(description="Creates YAML files for covalent docking with Boltz2 in output_dir/. Refer to README.md for csv format.")
     parser.add_argument("-i","--input_csv_file", type=str, required=True,help="Path to the input CSV file.")
     parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory for generated yamls.")
+    parser.add_argument("-m", "--msa", type=str, required=False, help="Path to MSA file in csv format. If provided, will be added to yaml.", default=None)
 
     args = parser.parse_args()
 

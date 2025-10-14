@@ -9,12 +9,11 @@ from .covalent_utils import process_covalent_smiles
 
 # tested last: 10/03/25 in test/
 # use ccd_pkl env
-
 def ensure_environment_variables():
     '''
     Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
     '''
-    setup_script = os.path.join(os.path.dirname(__file__), "../setup_enviorment.sh")
+    setup_script = os.path.join(os.path.dirname(__file__), "/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/setup_enviorment.sh")
     
     command = f"bash -c 'source {setup_script} && env'"
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash")
@@ -53,9 +52,11 @@ def process_protein(pdb, idx, lig_chain):
         res_aa = sequence[idx-1]
 
     res_name = residue_to_three_letter(res_aa)
+    print("Boltz will now dock to this residue: ", res_name)
 
     if verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
-        raise ValueError("[ERROR] The res_idx provided does NOT map to a covalent residue. " \
+        print(sequence)
+        raise ValueError(f"[ERROR] res_idx {idx} does NOT map to a covalent residue. " \
         "Please verify res_idx matches expected residue in sequence.")
     
     res_atom = residue_cov_atom(res_name)
@@ -65,8 +66,6 @@ def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
     '''Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking.'''
     
     validate_file(prot_file) # check if either txt or pdb
-    ensure_environment_variables()
-    ccd_db = os.getenv("CCD_DB")
     
     with open(lig_csv, 'r') as lig:
         reader = csv.reader(lig)
@@ -78,7 +77,7 @@ def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
         print(f"[WARNING] Output CSV '{out_csv}' already exists. Deleting and rewriting.")
         os.remove(out_csv)
 
-    expected_header = ["Compound_ID", "SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
+    expected_header = ["SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
     # writing header if needed
     write_header = True
     if os.path.exists(out_csv):
@@ -96,8 +95,8 @@ def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
         for lig in ligands:
             id = lig[0]
             smiles_no_lg, lig_atom, wh_type = remove_leaving_group(lig[1])
-            ccd = process_covalent_smiles(smiles_no_lg, ccd_db=ccd_db) # makes pkl file 
-            writer.writerow([id, smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
+            ccd = process_covalent_smiles(ccd_db, smiles_no_lg, compound_id=id, ) # makes pkl file 
+            writer.writerow([smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
         
 def main():
     parser = argparse.ArgumentParser(description="Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking. " \
@@ -109,10 +108,13 @@ def main():
     parser.add_argument("-g", "--lig_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
     parser.add_argument("-l","--lig_csv", type=str, required=True, help="Path to CSV with Ligand info.")
     parser.add_argument("-o","--out_csv", type=str, required=True, help="Path to output CSV. Will be formatted to work with setup_cov_job.py.")
-    parser.add_argument("-c","--ccd_db", type=str, required=True, help="Path to directory with covalent compound pkl files", default="/home/ymanasa/.boltz/mols")
 
     args = parser.parse_args()
-    generate_csv(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_csv=args.lig_csv, out_csv=args.out_csv, ccd_db=args.ccd_db)
+
+    ensure_environment_variables()
+    ccd_db = os.getenv("CCD_DB")
+
+    generate_csv(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_csv=args.lig_csv, out_csv=args.out_csv, ccd_db=ccd_db)
 
 if __name__ == "__main__":
     main()

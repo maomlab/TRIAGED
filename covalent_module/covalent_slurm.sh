@@ -1,15 +1,15 @@
 #!/bin/bash
-#SBATCH --job-name=covalent_boltz
+#SBATCH --job-name=hscpl_200_samples
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=00:10:00
 #SBATCH --account=tromeara99
-#SBATCH --partition=spgpu
+#SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem-per-gpu=25000m
+#SBATCH --mem-per-gpu=20GB
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-9%3
+#SBATCH --array=0-2%3
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 

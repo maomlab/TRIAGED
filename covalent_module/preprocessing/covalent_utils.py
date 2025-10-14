@@ -326,7 +326,7 @@ def compute_3d(mol) -> bool:
         return True
     return False
 
-def unique_ccd(length=5, max_attempts=10, ccd_db="/home/ymanasa/.bolts/mols"):
+def unique_ccd(ccd_db, length=5, max_attempts=10):
     '''Generates a unique alphanumeric string of specified length and ensures uniqueness.'''
 
     chars = string.ascii_uppercase + string.digits
@@ -337,17 +337,20 @@ def unique_ccd(length=5, max_attempts=10, ccd_db="/home/ymanasa/.bolts/mols"):
             return ccd
     raise RuntimeError("[ERROR] Could not find an available CCD after max attempts.")
 
-def process_covalent_smiles(smiles, ccd_db="/home/ymanasa/.boltz/mols"):
+def process_covalent_smiles(ccd_db, smiles, compound_id=False):
     '''
     Creates a covalent CCD ligand from a conanical SMILES string using Rdkit.
 
     :param smiles: str
         Sanitized canonical SMILES string of the covalent ligand.
+    :param compound_id: str
+        Unique identifier for the compound, used in naming the CCD file.
+        If not given, a random CCD code will be generated.
     :param ccd_db: str
         Path to the CCD database directory where .pkl files are stored.
 
     :return: str
-        Unique CCD code for the covalent ligand.
+        Unique CCD code (or the compound_id) for the covalent ligand.
     '''
     mol_sdf = Chem.MolFromSmiles(smiles) 
 
@@ -361,7 +364,11 @@ def process_covalent_smiles(smiles, ccd_db="/home/ymanasa/.boltz/mols"):
         atom.SetProp("name", atom_id)
     
     Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
-    ccd = unique_ccd(ccd_db=ccd_db)
+    if compound_id == False:
+        ccd = unique_ccd(ccd_db=ccd_db)
+    else: 
+        ccd = compound_id
+        
     with open(f"{ccd_db}/{ccd}.pkl", "wb") as f:
         pickle.dump(mol_sdf, f)
     return ccd
