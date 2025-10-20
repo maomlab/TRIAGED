@@ -14,8 +14,8 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
     `python -m covalent_module.single_inference [OPTIONS]`
 
 #### Input Format
-| Argument                     | Type    | Required | Description                                                                                                    |
-|------------------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------------|
+| Argument   | Type | Required | Description               |
+|-------------|------|-----------|---------------------------|
 | `--prot_file`     | `str`   | Yes      | Path to a PDB file.                  |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided. |         
 | `--lig_chain`    | `str`   | No      | Chain interacting with ligand in PDB file. Default is 'A'. |                          
@@ -39,12 +39,12 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
     `python -m covalent_module.submit_jobs [OPTIONS]`
 
 #### Input Format
-| Argument               | Type    | Required | Description                                                                                                    |
-|------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
+| Argument   | Type | Required | Description               |
+|-------------|------|-----------|---------------------------|
 | `--name`          | `str`   | Yes      | Unique name of protein. |
 | `--prot_file`     | `str`   | Yes      | Path to either a PDB file or a TXT file with a single sequence.   |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1.   |         
-| `--lig_chain`.    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
+| `--lig_chain`    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
 | `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers. Rows must have `Compound ID,SMILES` info. |
 | `--msa_path` | `str` | No | Path to MSA file in csv format. If not provided, msa server will be used. |
 | `--ccd_db`       | `str`    | No      | Path to output CSV. Will be formatted to work with setup_cov_job.py. Path to directory with covalent compound pkl files. Default: `/home/$USER/.boltz/mols`.        |
@@ -67,12 +67,12 @@ This script sets up a CSV file with necessary information regarding the ligand a
 
 #### Command-Line Arguments 
 
-| Argument               | Type    | Required | Description                                                                                                    |
-|------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
+| Argument   | Type | Required | Description               |
+|-------------|------|-----------|---------------------------|
 | `--name`          | `str`   | Yes      | Name of protein. Used for naming output files. Can be PDB ID, Uniprot ID, anything unique. |
 | `--prot_file`     | `str`   | Yes      | Path to either a PDB file or a TXT file with a single chain sequence. Do not include any headers.                                                                                                       |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided.                                                       |         
-| `--lig_chain`.    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
+| `--lig_chain`    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
 | `--lig_csv`       | `bool`  | No       | Path to CSV with Ligand info. Do not include any headers with rows `Compound ID,SMILES`. |
 | `--out_csv`       | `str`   | Yes      | Path to output CSV. Will be formatted to work with setup_cov_job.py | 
 
