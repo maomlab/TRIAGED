@@ -16,7 +16,7 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
 #### Input Format
 | Argument     | Type | Required | Description                |
 |---------------|------|-----------|----------------------------|
-| `--prot_file`     | `str`   | Yes      | Path to a PDB file.                  |
+| <code>--prot_file</code>    | `str`   | Yes      | Path to a PDB file.                  |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided. |         
 | `--lig_chain`    | `str`   | No      | Chain interacting with ligand in PDB file. Default is 'A'. |                          
 | `--msa_path` | `str` | No | Path to MSA file in csv format. If not provided, msa server will be used. |
