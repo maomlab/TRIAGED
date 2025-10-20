@@ -95,7 +95,7 @@ def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
         for lig in ligands:
             id = lig[0]
             smiles_no_lg, lig_atom, wh_type = remove_leaving_group(lig[1])
-            ccd = process_covalent_smiles(ccd_db, smiles_no_lg, compound_id=id, ) # makes pkl file 
+            ccd = process_covalent_smiles(ccd_db, smiles_no_lg, compound_id=id) # makes pkl file 
             writer.writerow([smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
         
 def main():
