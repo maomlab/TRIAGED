@@ -61,7 +61,7 @@ def write_yaml(outdir, smiles, compound_id, pdb_file, chain_id, res_idx, msa=Non
             default_flow_style=False
         )
 
-def main(outdir, smiles, compound_id, pdb_file, chain_id, res_idx, msa=None):
+def main(outdir, smiles, compound_id, pdb_file, res_idx, msa=None, chain_id='A'):
     '''
     Script runs code needed to make yaml for a single ligand and runs inference with boltz.
 
@@ -118,9 +118,9 @@ if __name__ == "__main__":
         parser = argparse.ArgumentParser(description="Will create yaml and script to run Boltz2 for covalent docking. Please use ccd_pkl conda env.")
         parser.add_argument("-p","--prot_file", type=str, required=True, help="Path to a PDB file.")
         parser.add_argument("-r", "--res_idx", type=int, required=True, help="Residue index to which the ligand needs to be docked. Starting at 1.")
-        parser.add_argument("-c", "--lig_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
+        parser.add_argument("-c", "--lig_chain", type=str, required=False, help="Chain interacting with ligand in PDB file. Single character.", default='A')
         parser.add_argument("-o","--outdir", type=str, required=True, help="Output directory for Boltz.")
-        parser.add_argument("-m", "--msa_path", type=str, required=False, help="Path to MSA file in a3m format. If provided, will be added to yaml.", default=None)
+        parser.add_argument("-m", "--msa_path", type=str, required=False, help="Path to MSA file in csv format. If provided, will be added to yaml.", default=None)
         parser.add_argument("-s", "--smiles", type=str, required=True, help=" SMILES of ligand.")
         parser.add_argument("-i", "--id", type=str, required=True, help="Compound ID for the ligand.")
 

@@ -1,10 +1,35 @@
 # Covalent Boltz2 Inference
 Environment required: ccd_pkl and boltz2 (need to upload yaml of the environemnt after testing)
-Environment requied to run `submit_jobs.py` is ccd_pkl 
-## Running Inference
+Environment requied to run `single_inference.py` and `submit_jobs.py` is ccd_pkl 
+## Running Single Prediction 
 
-The following are scripts to run inference with Boltz2 for covalent ligands on covalent proteins. 
-The main script, `submit_jobs.py`, is written to support SLURM job management on GreatLakes clusters. 
+The following script can be used to perform docking of a single covalent ligand to a protein with Boltz2.
+This script requires a GPU to run. 
+
+### `covalent_module/single_inference.py`
+Run predictions in command-line from the project directory (eg. `TRIAGED/`):
+    `python -m covalent_module.single_inference [OPTIONS]`
+
+#### Input Format
+| Argument               | Type    | Required | Description                                                                                                    |
+|------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
+| `--prot_file`     | `str`   | Yes      | Path to a PDB file.                  |
+| `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided. |         
+| `--lig_chain`.    | `str`   | No      | Chain interacting with ligand in PDB file. Default is 'A'. |                          
+| `--msa_path` | `str` | No | Path to MSA file in csv format. If not provided, msa server will be used. |
+| `--smiles` | `str` | Yes | SMILES of ligand. Will be processed to remove leaving group before docking. |
+| `--id` | `str` | Yes | Compound ID for the ligand. | 
+| `--outdir`       | `str`    | Yes      | Main output directory for Boltz. |
+
+#### Example Usage
+``` bash
+python -m covalent_module.single_inference -p covalent_module/test/single/5MAJ.pdb -r 25 -c A -m /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/test/single/5MAJ_msa.csv -i Y7FCI -s "O=C(N[C@@H](CC1=CC(C)=CC=C1)C(NCC#N)=O)C2=CC(C(C)(C)C)=NN2C" -o /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/test/single
+```
+
+## Running Virtual Screening
+
+The following are scripts to run inference with Boltz2 for docking covalent ligands into covalent proteins. 
+The main script, `submit_jobs.py`, is written to support SLURM job management on GreatLakes clusters in a virtual screening scenario. 
 
 ### `covalent_module/submit_jobs.py`
 Run predictions in command-line from the project directory (eg. `TRIAGED/`):
@@ -13,14 +38,16 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
 #### Input Format
 | Argument               | Type    | Required | Description                                                                                                    |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-| `--name`          | `str`   | Yes      | Name of protein. Used for naming output files. Can be PDB ID, Uniprot ID, anything unique. |
-| `--prot_file`     | `str`   | Yes      | Path to either a PDB file or a TXT file with a single chain sequence. Do not include any headers.                                                                                                       |
-| `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided.                                                       |         
+| `--name`          | `str`   | Yes      | Unique name of protein. |
+| `--prot_file`     | `str`   | Yes      | Path to either a PDB file or a TXT file with a single sequence.   |
+| `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1.   |         
 | `--lig_chain`.    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
-| `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers with `Compound ID,SMILES`. |
-| `--outdir`       | `str`    | Yes      | Main output directory for all jobs. |
+| `--lig_csv`       | `bool`  | Yes      | Path to CSV with Ligand info. Do not include any headers. Rows must have `Compound ID,SMILES` info. |
+| `--msa_path` | `str` | No | Path to MSA file in csv format. If not provided, msa server will be used. |
 | `--ccd_db`       | `str`    | No      | Path to output CSV. Will be formatted to work with setup_cov_job.py. Path to directory with covalent compound pkl files. Default: `/home/$USER/.boltz/mols`.        |
 | `--slurm`         | `str`    | No        | Path to SLURM template file. Default: `covalent_module/covalent_slurm.sh` |
+| `--debug` | `str` | No | If set, files will not be rewritten, just submitting slurm boltz job. Default=False. | 
+| `--outdir`       | `str`    | Yes      | Main output directory for all jobs. |
 
 #### Example Usage
 ``` bash
@@ -44,8 +71,7 @@ This script sets up a CSV file with necessary information regarding the ligand a
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided.                                                       |         
 | `--lig_chain`.    | `str`   | Yes      | Chain interacting with ligand in PDB file. Single character.        |                              
 | `--lig_csv`       | `bool`  | No       | Path to CSV with Ligand info. Do not include any headers with rows `Compound ID,SMILES`. |
-| `--out_csv`       | `str`   | Yes      | Path to output CSV. Will be formatted to work with setup_cov_job.py. |
-| `--ccd_db`       | `str`    | No      | Path to output CSV. Will be formatted to work with setup_cov_job.py. Path to directory with covalent compound pkl files. Default: `/home/$USER/.boltz/mols`.                                                  |
+| `--out_csv`       | `str`   | Yes      | Path to output CSV. Will be formatted to work with setup_cov_job.py | 
 
 #### Example Usage
 For a single protein and several ligands:

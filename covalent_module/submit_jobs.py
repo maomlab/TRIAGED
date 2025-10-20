@@ -77,7 +77,7 @@ def main():
     parser.add_argument("-l","--lig_csv", type=str, required=True, help="Path to CSV with Ligand info.")
     parser.add_argument("-o","--outdir", type=str, required=True, help="Output directory for all jobs.")
     parser.add_argument("-s","--slurm", type=str, required=False, help="Path to SLURM template file.", default="covalent_module/covalent_slurm.sh")
-    parser.add_argument("-m", "--msa_path", type=str, required=False, help="Path to MSA file in a3m format. If provided, will be added to yaml.", default=None)
+    parser.add_argument("-m", "--msa_path", type=str, required=False, help="Path to MSA file in csv format. If provided, will be added to yaml.", default=None)
     parser.add_argument("-d", "--debug", action="store_true", help="If set, files will not be rewritten, just submitting slurm boltz job.")
 
     args=parser.parse_args()
