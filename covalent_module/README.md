@@ -14,16 +14,17 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
     `python -m covalent_module.single_inference [OPTIONS]`
 
 #### Input Format
+<div style="overflow-x: auto;">
 | Argument     | Type | Required | Description                |
 |---------------|------|-----------|----------------------------|
-| <code>--prot_file</code>    | `str`   | Yes      | Path to a PDB file.                  |
+| <code>--prot_file</code>   | `str`   | Yes      | Path to a PDB file.                  |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided. |         
 | `--lig_chain`    | `str`   | No      | Chain interacting with ligand in PDB file. Default is 'A'. |                          
 | `--msa_path` | `str` | No | Path to MSA file in csv format. If not provided, msa server will be used. |
 | `--smiles` | `str` | Yes | SMILES of ligand. Will be processed to remove leaving group before docking. |
 | `--id` | `str` | Yes | Compound ID for the ligand. | 
 | `--outdir`       | `str`    | Yes      | Main output directory for Boltz. |
-
+</div>
 #### Example Usage
 ``` bash
 python -m covalent_module.single_inference -p covalent_module/test/single/5MAJ.pdb -r 25 -c A -m /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/test/single/5MAJ_msa.csv -i Y7FCI -s "O=C(N[C@@H](CC1=CC(C)=CC=C1)C(NCC#N)=O)C2=CC(C(C)(C)C)=NN2C" -o /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/test/single
