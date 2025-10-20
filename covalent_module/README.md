@@ -1,21 +1,24 @@
-# Covalent Boltz2 Inference
+# Boltz2 Inference for Covalent Docking
+
 Environment required: ccd_pkl and boltz2 (need to upload yaml of the environemnt after testing)
 Environment requied to run `single_inference.py` and `submit_jobs.py` is ccd_pkl 
-## Running Single Prediction 
+Set environmental variables in setup_environment.sh 
+
+## Single Ligand Inference 
 
 The following script can be used to perform docking of a single covalent ligand to a protein with Boltz2.
-This script requires a GPU to run. 
+This script requires a GPU to run. Does not use SLURM for job submission. 
 
 ### `covalent_module/single_inference.py`
 Run predictions in command-line from the project directory (eg. `TRIAGED/`):
     `python -m covalent_module.single_inference [OPTIONS]`
 
 #### Input Format
-| Argument               | Type    | Required | Description                                                                                                    |
-|------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
+| Argument                     | Type    | Required | Description                                                                                                    |
+|------------------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------------|
 | `--prot_file`     | `str`   | Yes      | Path to a PDB file.                  |
 | `--res_idx`       | `int`   | Yes      | Index of the residue to be covalently targeted by a covalent ligand. Starting at 1. Please confirm index matches expected residue in sequence/PDB provided. |         
-| `--lig_chain`.    | `str`   | No      | Chain interacting with ligand in PDB file. Default is 'A'. |                          
+| `--lig_chain`    | `str`   | No      | Chain interacting with ligand in PDB file. Default is 'A'. |                          
 | `--msa_path` | `str` | No | Path to MSA file in csv format. If not provided, msa server will be used. |
 | `--smiles` | `str` | Yes | SMILES of ligand. Will be processed to remove leaving group before docking. |
 | `--id` | `str` | Yes | Compound ID for the ligand. | 
