@@ -93,8 +93,11 @@ def parse_input_csv(csv_file: str) -> list[dict]:
             #print(f"Processing row: {row}")
             #print(f"Row keys: {list(row.keys())}")
             for key in row.keys():
-            
-                if key.startswith("compound_ID") or key.startswith("protein_ID") or key.startswith("dna_ID") or key.startswith("rna_ID") and row[key]:  
+                # initialize to avoid UnboundLocalError and only append when we actually build an entry
+                compound_entry = None
+
+                # Ensure the "and row[key]" applies to the whole set of prefix checks
+                if (key.startswith("compound_ID") or key.startswith("protein_ID") or key.startswith("dna_ID") or key.startswith("rna_ID")) and row[key]:
                     #print(f"Processing key: {key}")
                     if (len(key) > len("compound_ID")) or (len(key) > len("protein_ID")) or (len(key) > len("dna_ID")) or (len(key) > len("rna_ID")):
                         #print(f"Key '{key}' has a suffix, processing accordingly.")
@@ -141,7 +144,8 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "compound_num": row[num_key].strip() if num_key in row and row[num_key] else "1",
                                 "inchi": row[inchi_key].strip() if inchi_key in row and row[inchi_key] else None
                             }
-                        compound_data.append(compound_entry)
+                        if compound_entry is not None:
+                            compound_data.append(compound_entry)
                     if key.startswith("protein_ID") and row[key]:    
                         if protein_id_key in row and row[protein_id_key]:
                             compound_entry = {
@@ -151,7 +155,8 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "pdb_path": row[pdb_path_key].strip() if pdb_path_key in row and row[pdb_path_key] else None,
                                 "pdb_id": row[pdb_id_key].strip() if pdb_id_key in row and row[pdb_id_key] else None
                             }
-                        compound_data.append(compound_entry)
+                        if compound_entry is not None:
+                            compound_data.append(compound_entry)
                     if key.startswith("dna_ID") and row[key]:
                         if dna_sequence_key in row and row[dna_sequence_key]:
                             compound_entry = {
@@ -159,7 +164,8 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "dna_sequence": row[dna_sequence_key].strip(),
                                 "dna_num": row[dna_num_key].strip() if dna_num_key in row and row[dna_num_key] else "1"
                             }
-                        compound_data.append(compound_entry)
+                        if compound_entry is not None:
+                            compound_data.append(compound_entry)
 
                     if key.startswith("rna_ID") and row[key]:
                         if rna_sequence_key in row and row[rna_sequence_key]:
@@ -168,7 +174,8 @@ def parse_input_csv(csv_file: str) -> list[dict]:
                                 "rna_sequence": row[rna_sequence_key].strip(),
                                 "rna_num": row[rna_num_key].strip() if rna_num_key in row and row[rna_num_key] else "1"
                             }
-                        compound_data.append(compound_entry)
+                        if compound_entry is not None:
+                            compound_data.append(compound_entry)
 
                     #print(f"Parsed entry: {compound_entry}")
             parsed_data.append(compound_data)
