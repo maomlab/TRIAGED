@@ -197,7 +197,8 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
     :param output_dir: Path to the output directory.
     :param job_name: Name of the SLURM job.
     """
-    email = os.getenv("SLURM_EMAIL", "default_email@example.com")  # Use environment variable for email
+    email = os.getenv("SLURM_EMAIL")  # Use environment variable for email
+    slurm_account = os.getenv("SLURM_ACCOUNT")  # Use environment variable for SLURM account
     slurm_script_path = output_dir
     with open(slurm_script_path, "w") as slurm_script:
         slurm_script.write(f"""#!/bin/bash
@@ -206,17 +207,17 @@ def create_slurm_submit_script(work_dir, receptor, output_dir, job_name="boltz_s
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=24:00:00
-#SBATCH --account=maom99
+#SBATCH --account={slurm_account}
 #SBATCH --partition=spgpu
 #SBATCH --gpus-per-node=1
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=1
 #SBATCH --mem-per-gpu=48000m
 #SBATCH --mail-user={email}
 #SBATCH --output={job_name}_{receptor}_slurm.log
 
 mkdir -p ../outputs/{receptor}
 module load cuda cudnn
-boltz predict {work_dir} --out_dir ../outputs/{receptor} --num_workers 8
+boltz predict {work_dir} --out_dir ../outputs/{receptor}
 """)
     print(f"SLURM submit script created at {slurm_script_path}")
 
