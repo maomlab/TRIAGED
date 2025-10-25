@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=hscpl_200_samples_all_ligs
+#SBATCH --job-name=tgcpl_3rep
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=00:10:00

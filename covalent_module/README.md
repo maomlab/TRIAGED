@@ -7,7 +7,7 @@ Set environmental variables in setup_environment.sh
 ## Single Ligand Inference 
 
 The following script can be used to perform docking of a single covalent ligand to a protein with Boltz2.
-This script requires a GPU to run. Does not use SLURM for job submission. 
+This script requires a GPU to run. Can be run with and without SLURM. If using SLURM, please set SLURM arguments appropriately in slurm template (example: slurm_args.sh).
 
 ### `covalent_module/single_inference.py`
 Run predictions in command-line from the project directory (eg. `TRIAGED/`):
@@ -23,6 +23,7 @@ Run predictions in command-line from the project directory (eg. `TRIAGED/`):
 | `--smiles` | `str` | Yes | SMILES of ligand. Will be processed to remove leaving group before docking. |
 | `--id` | `str` | Yes | Compound ID for the ligand. | 
 | `--outdir`       | `str`    | Yes      | Main output directory for Boltz. |
+| `--slurm` | `str` | No | Path to SLURM template file. Default: None. |
 
 #### Example Usage
 ``` bash

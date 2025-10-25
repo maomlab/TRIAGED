@@ -335,7 +335,7 @@ def unique_ccd(ccd_db, length=5, max_attempts=10):
         ccd = ''.join(random.choices(chars, k=length))
         if not os.path.exists(f"{ccd_db}/{ccd}.pkl"):
             return ccd
-    raise RuntimeError("[ERROR] Could not find an available CCD after max attempts.")
+    raise RuntimeError("[ERROR] Could not find a unique CCD ID after max attempts.")
 
 def process_covalent_smiles(ccd_db, smiles, compound_id=False):
     '''
@@ -364,7 +364,7 @@ def process_covalent_smiles(ccd_db, smiles, compound_id=False):
         atom.SetProp("name", atom_id)
     
     Chem.SetDefaultPickleProperties(Chem.PropertyPickleOptions.AllProps)
-    if compound_id == False:
+    if compound_id == False or len(compound_id) > 5:
         ccd = unique_ccd(ccd_db=ccd_db)
     else: 
         ccd = compound_id

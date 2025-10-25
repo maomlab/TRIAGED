@@ -61,7 +61,7 @@ def write_yaml(outdir, smiles, compound_id, pdb_file, chain_id, res_idx, msa=Non
             default_flow_style=False
         )
 
-def main(outdir, smiles, compound_id, pdb_file, res_idx, msa=None, chain_id='A'):
+def main(outdir, smiles, compound_id, pdb_file, res_idx, msa=None, chain_id='A', slurm=None):
     '''
     Script runs code needed to make yaml for a single ligand and runs inference with boltz.
 
@@ -85,7 +85,7 @@ def main(outdir, smiles, compound_id, pdb_file, res_idx, msa=None, chain_id='A')
     # write a bash script and run it 
     with open(boltz_job, "w") as boltz:
         boltz.write("#!/bin/bash\n")
-        # boltz.write("source ~/.bashrc\n")       
+        # if slurm not None, slurm args are added later over here 
         boltz.write("source  /nfs/turbo/umms-maom/ymanasa/miniconda3/etc/profile.d/conda.sh\n")       
         boltz.write("conda activate boltz2\n")
         boltz.write("module load cuda cudnn\n")
@@ -107,10 +107,22 @@ def main(outdir, smiles, compound_id, pdb_file, res_idx, msa=None, chain_id='A')
         boltz.write('    echo "Boltz prediction completed successfully."\n')
         boltz.write('fi\n')
 
-    subprocess.run(
-                ["bash", boltz_job],
-                check=True)
+    if slurm is not None: 
+        with open(slurm, "r") as f:
+            slurm_lines = f.read()
 
+        with open(boltz_job, "r") as f:
+            content = f.readlines()
+
+        # Insert Slurm lines after the first line in boltz_job
+        content.insert(1, slurm_lines + "\n")
+        with open(boltz_job, "w") as f:
+            f.writelines(content)
+        subprocess.run(["sbatch", boltz_job], check=True)
+
+    else: 
+        subprocess.run(["bash", boltz_job], check=True)
+        
 if __name__ == "__main__":
     print(torch.cuda.is_available())
     print(torch.cuda.device_count())
@@ -123,13 +135,11 @@ if __name__ == "__main__":
         parser.add_argument("-m", "--msa_path", type=str, required=False, help="Path to MSA file in csv format. If provided, will be added to yaml.", default=None)
         parser.add_argument("-s", "--smiles", type=str, required=True, help=" SMILES of ligand.")
         parser.add_argument("-i", "--id", type=str, required=True, help="Compound ID for the ligand.")
+        parser.add_argument("--slurm", type=str, required=False, help="Path to slurm template.", default=None)
 
         args=parser.parse_args()
         import ipdb; ipdb.set_trace()
         setup_cov_yamls.ensure_environment_variables()
-        main(outdir=args.outdir, smiles=args.smiles, compound_id=args.id, pdb_file=args.prot_file, chain_id=args.lig_chain, res_idx=args.res_idx, msa=args.msa_path) 
+        main(outdir=args.outdir, smiles=args.smiles, compound_id=args.id, pdb_file=args.prot_file, chain_id=args.lig_chain, res_idx=args.res_idx, msa=args.msa_path, slurm=args.slurm) 
     else:
-        print("No GPU")
-
-    
-
+        print("No GPU detected.")
