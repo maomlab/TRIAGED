@@ -79,7 +79,63 @@ def read_boltz_predictions(predictions_dir, reps=False):
                 "Complex iPDE": complex_ipde
             })
             
+    if reps:
+        all_reps = [os.path.join(predictions_dir, f) for f in os.listdir(predictions_dir)] # only replicate dirs should be in here
+        data = []
+        for rep in all_reps:
+            compounds_in_reps = [d for d in os.listdir(rep) if os.path.isdir(os.path.join(rep, d))]
+            rep_name = rep.split('/')[-1]
+            for compound_name in compounds_in_reps:
+                compound_dir = os.path.join(predictions_dir, rep_name, compound_name)
+                results = [compound_dir, f"boltz_results_{compound_name}", "predictions", f"{compound_name}"]
+                compound_result =  "/".join(results)
+        
+                if not os.path.isdir(compound_result):
+                    continue
 
+                affinity_file = os.path.join(compound_result, f"affinity_{compound_name}.json")
+                confidence_file = os.path.join(compound_result, f"confidence_{compound_name}_model_0.json")
+
+                if os.path.exists(affinity_file) and os.path.exists(confidence_file):
+                    with open(affinity_file, 'r') as af:
+                        affinity_data = json.load(af)
+                        affinity_pred_value = affinity_data.get("affinity_pred_value", None)
+                        ic50_nm = (10 ** affinity_pred_value) * 1000
+                        affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
+
+                    with open(confidence_file, 'r') as cf:
+                        confidence_data = json.load(cf)
+                        confidence_score = confidence_data.get("confidence_score", None)
+                        ptm = confidence_data.get("ptm", None)
+                        iptm = confidence_data.get("iptm", None)
+                        ligand_iptm = confidence_data.get("ligand_iptm", None)
+                        protein_iptm = confidence_data.get("protein_iptm", None)
+                        complex_plddt = confidence_data.get("complex_plddt", None)
+                        complex_iplddt = confidence_data.get("complex_iplddt", None)
+                        complex_pde = confidence_data.get("complex_pde", None)
+                        complex_ipde = confidence_data.get("complex_ipde", None)
+
+                    # energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
+                    compound_id = compound_name.split('_')[-1]
+
+                    data.append({
+                        "rep_id": rep_name,
+                        "compound_id": compound_id,
+                        "Affinity Pred log10(IC50)": affinity_pred_value,
+                        "IC50-like (nM)": ic50_nm,
+                        "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,
+                        "Binding Probability": affinity_probability_binary,
+                        "Pred Label":  True if affinity_probability_binary > 0.5 else False,
+                        "Confidence Score": confidence_score,
+                        "kcal/mol": None,
+                        "PTM": ptm,
+                        "IPTM": iptm,
+                        "Ligand IPTM": ligand_iptm,
+                        "Protein IPTM": protein_iptm,
+                        "Complex pLDDT": complex_plddt,
+                        "Complex iPLDDT": complex_iplddt,
+                        "Complex PDE": complex_pde,
+                        "Complex iPDE": complex_ipde})
     return pd.DataFrame(data)
 
 def process_invitro(invitro_df, score_col, threshold=1000):
@@ -195,7 +251,7 @@ def affinity_scatter(df_truth_pred, score_col, run_name=None):
     ax.legend()
     ax.text(
     0.95, 0.90, f"Spearman r = {spearman_corr:.2f}", transform=ax.transAxes, ha='right', va='top')
-    ax.axis('equal')
+    # ax.axis('equal')
     ax.grid(True)
 
     return {fig:ax}
@@ -286,8 +342,12 @@ def calculate_metrics(df_truth_pred, score_col, alpha=20):
     ef = enrichment_factor(df_truth_pred, score_col, x=0.10)
 
     # ROC
-    fpr, tpr, _ = roc_curve(y_true, y_scores)
-    roc_auc = roc_auc_score(y_true, y_scores)
+    if score_col == 'Affinity Pred log10(IC50)':
+        fpr, tpr, _ = roc_curve(y_true, -y_scores)
+        roc_auc = roc_auc_score(y_true, -y_scores)
+    else:
+        fpr, tpr, _ = roc_curve(y_true, y_scores)
+        roc_auc = roc_auc_score(y_true, y_scores)
 
     # PR curve
     precision, recall, _ = precision_recall_curve(y_true, y_scores)
@@ -331,7 +391,6 @@ def plot_curves(curves={}, metrics={}, run_name=None):
     for metric in metrics: 
       
         if metric == 'ROC AUC':
-            print('plotting auc roc')
             # --- ROC Curve ---
             fig_roc, ax_roc = plt.subplots(figsize=(6, 5))
             fpr, tpr = curves['auc_roc']
@@ -346,7 +405,6 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             figs['roc_curve'] = [fig_roc, ax_roc]
         
         elif metric == 'PR-AUC':
-            print('plotting pr auc')
             # --- Precision-Recall Curve ---
             fig_pr, ax_pr = plt.subplots(figsize=(6, 5))
             recall, precision = curves['pr_auc']
@@ -361,7 +419,6 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             figs['pr_curve'] = [fig_pr, ax_pr]
 
         elif metric == 'BEDROC':
-            print('plotting bedroc')
             # --- BEDROC (Cumulative Hits) Curve ---
             fig_bedroc, ax_bedroc = plt.subplots(figsize=(6, 5))
             x, cum_hits = curves['bedroc']
