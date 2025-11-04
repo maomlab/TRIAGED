@@ -6,7 +6,7 @@ from analysis_utils import *
 import matplotlib.pyplot as plt
 from IPython.display import display # for jupyter notebook 
 
-def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, plot=False):
+def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, exp_col, plot=False):
     '''
     Compares Boltz predictions to in vitro IC50 data and computes performance metrics.
 
@@ -20,7 +20,7 @@ def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, plot=False):
 
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
-    df_invitro_labeled = process_invitro(invitro_df=df_invitro, score_col="IC50 (nM)") 
+    df_invitro_labeled = process_invitro(invitro_df=df_invitro, score_col=exp_col) 
 
     positive_df = df_invitro_labeled[df_invitro_labeled['is_binder'] == True]
     negative_df = df_invitro_labeled[df_invitro_labeled['is_binder'] == False]
@@ -54,7 +54,7 @@ def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, plot=False):
         more_figs = plot_curves(run_name=run_name, curves=curves, metrics=metrics)
         analysis_dict['plots'] = [plot, more_figs] # dicts within lists 
 
-    return boltz_preds_df, analysis_dict
+    return df_truth_pred, analysis_dict
 
 def mean_metrics(boltz_reps_outdir, score_col):
     '''
@@ -71,7 +71,7 @@ def mean_metrics(boltz_reps_outdir, score_col):
     return all_pred_reps, stats 
 
 
-def analyze_mean_preds(invitro_file, stats_df, score_col, run_name=None, plot=False):
+def analyze_mean_preds(invitro_file, stats_df, score_col, exp_col, run_name=None, plot=False):
     
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
@@ -100,14 +100,14 @@ def analyze_mean_preds(invitro_file, stats_df, score_col, run_name=None, plot=Fa
     }
 
     if plot: 
-        scatter = affinity_scatter(df_truth_pred=df_truth_pred, run_name=run_name, score_col=score_col)
+        scatter = affinity_scatter(df_truth_pred=df_truth_pred, run_name=run_name, score_col=score_col, exp_col=exp_col)
         curve_figs = plot_curves(run_name=run_name, curves=curves, metrics=metrics)
         analysis_dict['plots'] = {
             'scatter': scatter,
             'curves': curve_figs
         }
 
-    return analysis_dict
+    return df_truth_pred, analysis_dict
 
 
 def view_plot(fig, save_path=None, show=True, close=False):

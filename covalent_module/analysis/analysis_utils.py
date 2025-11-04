@@ -43,7 +43,8 @@ def read_boltz_predictions(predictions_dir, reps=False):
             with open(affinity_file, 'r') as af:
                 affinity_data = json.load(af)
                 affinity_pred_value = affinity_data.get("affinity_pred_value", None)
-                ic50_nm = (10 ** affinity_pred_value) * 1000
+                ic50_nm = (10 ** affinity_pred_value) * 1000 
+                pred_pic50 = -math.log10((10 ** affinity_pred_value) * 1e-6)
                 affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
 
             with open(confidence_file, 'r') as cf:
@@ -62,8 +63,8 @@ def read_boltz_predictions(predictions_dir, reps=False):
 
             data.append({
                 "compound_id": compound_id,
-                "Affinity Pred log10(IC50)": affinity_pred_value,
-                "IC50-like (nM)": ic50_nm,
+                "Pred log10(IC50)": affinity_pred_value,
+                "Pred pIC50": pred_pic50,
                 "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,
                 "Binding Probability": affinity_probability_binary,
                 "Pred Label":  True if affinity_probability_binary > 0.5 else False,
@@ -101,6 +102,7 @@ def read_boltz_predictions(predictions_dir, reps=False):
                         affinity_data = json.load(af)
                         affinity_pred_value = affinity_data.get("affinity_pred_value", None)
                         ic50_nm = (10 ** affinity_pred_value) * 1000
+                        pred_pic50 = -math.log10((10 ** affinity_pred_value) * 1e-6)
                         affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
 
                     with open(confidence_file, 'r') as cf:
@@ -121,8 +123,8 @@ def read_boltz_predictions(predictions_dir, reps=False):
                     data.append({
                         "rep_id": rep_name,
                         "compound_id": compound_id,
-                        "Affinity Pred log10(IC50)": affinity_pred_value,
-                        "IC50-like (nM)": ic50_nm,
+                        "Pred log10(IC50)": affinity_pred_value,
+                        "Pred pIC50": pred_pic50,
                         "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,
                         "Binding Probability": affinity_probability_binary,
                         "Pred Label":  True if affinity_probability_binary > 0.5 else False,
@@ -153,7 +155,8 @@ def process_invitro(invitro_df, score_col, threshold=1000):
     
     invitro_df["is_binder"] = invitro_df[score_col].apply(lambda x: True if x < int(threshold) else False)
 
-    invitro_df["Affinity log10(IC50)"] = invitro_df[score_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM to uM and log10(uM)
+    invitro_df["log10(IC50)"] = invitro_df[score_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM -> uM and log10(uM)
+    invitro_df["pIC50"] = invitro_df[score_col].apply(lambda x: -math.log10(x * 1e-9)) # nM -> -log10(M)
     invitro_df.drop(score_col, axis=1, inplace=True)
     # remove nans 
     invitro_df.replace(["nan", "NaN"], np.nan, inplace=True) 
@@ -209,18 +212,19 @@ def plot_enrichment(ef_dict):
 
     return fig, ax
     
-def affinity_scatter(df_truth_pred, score_col, run_name=None):
+def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
     '''
-    Plots predicted vs experimental affinity in log(IC50) space with linear fit.
+    Plots predicted vs experimental affinity.
 
-    :param df_truth_pred: DataFrame containing predicted and experimental values with labels.
+    :param df_truth_pred: DataFrame containing predicted and experimental values.
     :param score_col: Column name for predicted affinity scores.
+    :param exp_col: Column name for experimental affinity scores.
     :param run_name: Optional name for the run, shown in subtitle.
 
     :return: dict with {fig: ax} of the scatter plot.
     '''
 
-    y_label = "Affinity log10(IC50)"   # experimental
+    y_label = exp_col  # experimental
     x_label = score_col  # predicted
 
     x = df_truth_pred[x_label].values.reshape(-1, 1)
@@ -239,13 +243,13 @@ def affinity_scatter(df_truth_pred, score_col, run_name=None):
 
     # --- Plot ---
     fig, ax = plt.subplots(figsize=(6, 6))
-    ax.scatter(x, y, alpha=0.7)
-    ax.plot(x, y_pred, color='red', label=f"Linear fit (R² = {r_squared:.2f})")
+    ax.scatter(x, y, alpha=0.7, color='grey')
+    ax.plot(x, y_pred, color='grey', linestyle=":", label=f"Linear fit (R² = {r_squared:.2f})")
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
 
     # Titles
-    plt.suptitle(f"Experimental vs Predicted\n{score_col} Correlation", fontsize=12, fontweight='bold', y=1.00)
+    plt.suptitle(f"Experimental vs \n{score_col} Correlation", fontsize=12, fontweight='bold', y=1.00)
     plt.title(f"for {run_name}", fontsize=10, color='black', y=1.00)
 
     ax.legend()
@@ -342,7 +346,7 @@ def calculate_metrics(df_truth_pred, score_col, alpha=20):
     ef = enrichment_factor(df_truth_pred, score_col, x=0.10)
 
     # ROC
-    if score_col == 'Affinity Pred log10(IC50)':
+    if score_col == 'Pred log10(IC50)':
         fpr, tpr, _ = roc_curve(y_true, -y_scores)
         roc_auc = roc_auc_score(y_true, -y_scores)
     else:
