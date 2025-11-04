@@ -11,6 +11,7 @@ from covalent_module.preprocessing import setup_cov_yamls
 def run(name, prot_file, res_idx, lig_chain, lig_csv, outdir, ccd_db, msa_path=None, slurm_template="covalent_module/covalent_slurm.sh", debug=False):
     if not debug:
         os.makedirs(outdir, exist_ok=True)
+        shutil.copy(slurm_template, outdir) 
 
         # generate csv for yaml building
         base_name = os.path.basename(lig_csv).replace(".csv", "")
@@ -44,9 +45,10 @@ def run(name, prot_file, res_idx, lig_chain, lig_csv, outdir, ccd_db, msa_path=N
             with open(job_list_file, 'a') as f: 
                 f.write(f"{yaml_path} {pred_lig_dir}\n")
 
+        slurm_script = os.path.join(outdir, os.path.basename(slurm_template))
         # submit jobs
         subprocess.run(
-                ["sbatch", slurm_template, job_list_file],
+                ["sbatch", slurm_script, job_list_file],
                 check=True
             )
 
