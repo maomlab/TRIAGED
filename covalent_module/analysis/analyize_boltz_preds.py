@@ -136,18 +136,21 @@ def view_plot(fig, save_path=None, show=True, close=False):
         display(fig) 
     if close:
         plt.close(fig)
-        
-def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, write_output=None):
+
+def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, write_output=None, run_name=None):
     '''
     Plots topN ligands predicted by boltz vs topN experimentally ranked. 
     Uses truth_pred_df, analysis_dict output from analyze_mean_preds only!
     :param topN (int): Must be less than 1 (percentage/100)
     :param write_output (str): If path given, the merged dataframe showing which ligands of topN come 
-    from predicted, experimental, or both will be written to given path. 
+    from predicted, experimental, or both will be written to given path. Figure too will output here.
     '''
     if topN > 1:
         print('topN must be less than 1 (percentage/100)')
         sys.exit(1)
+
+    if run_name is None:
+        run_name = 'merged_ligs'
 
     if score_col == "Pred log10(IC50)":
         # most negative val needs to be top/best for log(ic50)
@@ -178,7 +181,9 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, wri
         how="outer",       # use outer to include all from both
         indicator=True     # adds a column "_merge"
     )
-        df_truth_pred2.to_csv(os.path.join(write_output, 'merged.csv'), index=False)
+
+        os.makedirs(write_output, exist_ok=True)
+        df_truth_pred2.to_csv(os.path.join(write_output, f'{run_name}_source.csv'), index=False)
 
     fig = list(analysis_dict['plots']['scatter'].keys())[0] 
     ax  = list(analysis_dict['plots']['scatter'].values())[0]   
@@ -227,7 +232,52 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, wri
     # add legend
     ax.legend()
     if write_output:
-        fig.savefig(os.path.join(write_output, f'top{topN*100}_scatter.png'), dpi=300, bbox_inches="tight")
+        fig.savefig(os.path.join(write_output, f'{run_name}_top{topN*100}_scatter.png'), dpi=300, bbox_inches="tight")
 
-    if not write_output:
+    if write_output is None:
+        display(fig)
+
+
+def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=None):
+    """
+    Plot combined ROC or PR curves from multiple systems on one figure.
+
+    :param systems: dict of system_name -> {'curves': {...}, 'metrics': {...}}
+    :param curve_type: 'roc' or 'pr'
+    """
+    if run_name is None:
+        run_name = 'all_runs'
+
+    fig, ax = plt.subplots(figsize=(6, 5))
+
+    if curve_type == 'roc':
+        for run_name, data in systems.items():
+            fpr, tpr = data['curves']['auc_roc']
+            auc = data['metrics']['ROC AUC']
+            ax.plot(fpr, tpr, lw=2, label=f"{run_name} (AUC={auc:.3f})")
+
+        ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
+        ax.set_xlabel("False Positive Rate")
+        ax.set_ylabel("True Positive Rate")
+        plt.title(f"{run_name} ROC Curves")
+    
+    elif curve_type == 'pr':
+        for run_name, data in systems.items():
+            recall, precision = data['curves']['pr_auc']
+            auc = data['metrics']['PR-AUC']
+            ax.plot(recall, precision, lw=2, label=f"{run_name} (PR-AUC={auc:.3f})")
+
+        ax.set_xlabel("Recall")
+        ax.set_ylabel("Precision")
+        plt.title(f"{run_name} Precision-Recall Curves")
+
+    ax.legend()
+    ax.grid(alpha=0.3)
+    plt.tight_layout()
+    plt.show()
+  
+    if write_output:
+        fig.savefig(os.path.join(write_output, f'{run_name}_roc.png'), dpi=300, bbox_inches="tight")
+
+    if write_output is None:
         display(fig)
