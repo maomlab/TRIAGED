@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import argparse
 import json
+import sys
 from analysis_utils import *
 import matplotlib.pyplot as plt
 from IPython.display import display # for jupyter notebook 
@@ -135,3 +136,98 @@ def view_plot(fig, save_path=None, show=True, close=False):
         display(fig) 
     if close:
         plt.close(fig)
+        
+def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, write_output=None):
+    '''
+    Plots topN ligands predicted by boltz vs topN experimentally ranked. 
+    Uses truth_pred_df, analysis_dict output from analyze_mean_preds only!
+    :param topN (int): Must be less than 1 (percentage/100)
+    :param write_output (str): If path given, the merged dataframe showing which ligands of topN come 
+    from predicted, experimental, or both will be written to given path. 
+    '''
+    if topN > 1:
+        print('topN must be less than 1 (percentage/100)')
+        sys.exit(1)
+
+    if score_col == "Pred log10(IC50)":
+        # most negative val needs to be top/best for log(ic50)
+        df_sorted_pred = truth_pred_df.sort_values(by=score_col, ascending=True) 
+        df_sorted_truth = truth_pred_df.sort_values(by="log10(IC50)", ascending=True)
+    else:
+        df_sorted_pred = truth_pred_df.sort_values(by=score_col, ascending=False) 
+        df_sorted_truth = truth_pred_df.sort_values(by="log10(IC50)", ascending=True) # always using log10(IC50) from experiments
+
+    # predicted topN by boltz
+    topN_pred = df_sorted_pred.head(int(topN * len(df_sorted_pred)))
+    topN_x_pred = topN_pred[['compound_id', score_col]]
+    topN_y_pred =  topN_pred[['compound_id', "log10(IC50)"]]
+
+    # experimental topN
+    topN_truth = df_sorted_truth.head(int(topN * len(df_sorted_truth)))
+    topN_x_truth= topN_truth[['compound_id', score_col]]
+    topN_y_truth=  topN_truth[['compound_id', "log10(IC50)"]]
+
+    # find common ligands in topN of both predicted and true values
+    df_truth_pred = pd.merge(topN_truth[['compound_id', "log10(IC50)"]], topN_pred[['compound_id', score_col]], on="compound_id")
+
+    if write_output: 
+        df_truth_pred2 = pd.merge(
+        topN_truth[['compound_id', "log10(IC50)"]],
+        topN_pred[['compound_id', score_col]],
+        on="compound_id",
+        how="outer",       # use outer to include all from both
+        indicator=True     # adds a column "_merge"
+    )
+        df_truth_pred2.to_csv(os.path.join(write_output, 'merged.csv'), index=False)
+
+    fig = list(analysis_dict['plots']['scatter'].keys())[0] 
+    ax  = list(analysis_dict['plots']['scatter'].values())[0]   
+
+    # overlap compounds in topN
+    ax.scatter(
+    df_truth_pred[score_col],
+    df_truth_pred['log10(IC50)'],
+    color='purple',
+    label=f'top{topN*100}% overlap',
+    alpha=0.7
+    )
+
+    ax.legend()
+    ax.axis('equal')
+
+    # only in ground truth ranked not predicted
+    commons = df_truth_pred['compound_id'].tolist()
+    topN_x_truth_filtered = topN_x_truth[~topN_x_truth['compound_id'].isin(commons)]
+    topN_y_truth_filtered = topN_y_truth[~topN_y_truth['compound_id'].isin(commons)] 
+
+    # plot on existing fig,ax
+    ax.scatter(
+    topN_x_truth_filtered[score_col],
+    topN_y_truth_filtered['log10(IC50)'],
+    color='red',
+    label=f'top{topN*100}% truth',
+    alpha=0.7
+    )
+
+    # add legend
+    ax.legend()
+
+    # only in ground predicted ranked not ground truth
+    topN_x_pred_filtered = topN_x_pred[~topN_x_pred['compound_id'].isin(commons)]
+    topN_y_pred_filtered = topN_y_pred[~topN_y_pred['compound_id'].isin(commons)]
+
+    ax.scatter(
+    topN_x_pred_filtered[score_col],
+    topN_y_pred_filtered['log10(IC50)'],
+    color='blue',
+    label=f'top{topN*100}% pred',
+    alpha=0.7
+    )
+
+    # add legend
+    ax.legend()
+    if write_output:
+        fig.savefig(os.path.join(write_output, f'top{topN*100}_scatter.png'), dpi=300, bbox_inches="tight")
+
+    if not write_output:
+        display(fig)

@@ -422,17 +422,17 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             ax_pr.grid(alpha=0.3)
             figs['pr_curve'] = [fig_pr, ax_pr]
 
-        elif metric == 'BEDROC':
-            # --- BEDROC (Cumulative Hits) Curve ---
-            fig_bedroc, ax_bedroc = plt.subplots(figsize=(6, 5))
-            x, cum_hits = curves['bedroc']
-            ax_bedroc.plot(x, cum_hits, color='green', lw=2, label=f"BEDROC = {metrics['BEDROC']:.3f}")
-            ax_bedroc.set_xlabel("Compound Rank")
-            ax_bedroc.set_ylabel("Cumulative Hits")
-            plt.suptitle(f"BEDROC-like Cumulative Hit Curve\nusing {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
-            plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
-            ax_bedroc.legend()
-            ax_bedroc.grid(alpha=0.3)
-            figs['bedroc_curve'] = [fig_bedroc, ax_bedroc]
+        # elif metric == 'BEDROC':
+        #     # --- BEDROC (Cumulative Hits) Curve ---
+        #     fig_bedroc, ax_bedroc = plt.subplots(figsize=(6, 5))
+        #     x, cum_hits = curves['bedroc']
+        #     ax_bedroc.plot(x, cum_hits, color='green', lw=2, label=f"BEDROC = {metrics['BEDROC']:.3f}")
+        #     ax_bedroc.set_xlabel("Compound Rank")
+        #     ax_bedroc.set_ylabel("Cumulative Hits")
+        #     plt.suptitle(f"BEDROC-like Cumulative Hit Curve\nusing {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
+        #     plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
+        #     ax_bedroc.legend()
+        #     ax_bedroc.grid(alpha=0.3)
+        #     figs['bedroc_curve'] = [fig_bedroc, ax_bedroc]
 
     return figs
