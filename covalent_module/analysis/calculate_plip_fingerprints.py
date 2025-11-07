@@ -6,36 +6,11 @@ import fnmatch
 import shutil
 import re
 import gemmi
+import sys
 import os
 import tempfile
 import csv
 import compile_best_model_structures as align
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Analyzes a collection of .cif files"
-                            "from a boltz2 workflow using PLIP and outputs" \
-                            "ligand information as well as residue interaction information" \
-                            "calculated by PLIP in a CSV.")
-    parser.add_argument("-d", "--directory", required=True,
-                        help="Root directory of .cif files for analysis.")
-    parser.add_argument("-o", "--outdir", required=True,
-                        help="Path to output directory." \
-                        "Defaults to 'compiled_plip_fprints.csv'")
-    parser.add_argument("-rt", "--receptor_type", required=True,
-                        help="Type of receptor - 'dna', 'rna', or 'protein.'", 
-                        choices=['dna', 'rna', 'protein'])
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        help="Enable verbose output.")
-    parser.add_argument("-y", "--pymol_vis", default=False, action="store_true",
-                        help="If set, will generate pymol visualization of the interactions.")
-    parser.add_argument("-p", "--parent", required=False, default="",
-                        help="Path to the parent structure file to align to for pymol visualizations." \
-                        "Can be CIF or PDB. If not given, will not generate pymol visualizations.")
-    parser.add_argument("-n", "--csv_name", required=False, default="plip_fingerprints",
-                        help="Name of the csv files (don't include csv extension).")
-
-    return parser.parse_args()
-
 
 def get_interactions(interactions):
     """ Takes a PLIP interaction object and gets the number of each interaction. """
@@ -130,11 +105,11 @@ def convert_pdb_to_pdb(source_pdb_path, target_pdb_path):
     
     # Write the structure to the target PDB
     structure.write_pdb(target_pdb_path)
-
-if __name__ == "__main__":
-    # Headers for the CSV output. Includes Ligand features as well as 
+    
+def main(args):
+     # Headers for the CSV output. Includes Ligand features as well as 
     # ligand-receptor interactionns
-    headers = ["name", "modelnum","smiles", "inchi", "molwt", 
+    headers = ["name","smiles", "inchi", "molwt", 
                "numheavy", "numrotbonds", "numrings", 
                "hydrophobicatoms", "hbondacceptors", 
                "saltbridges", "hbonds", "pication", 
@@ -142,7 +117,6 @@ if __name__ == "__main__":
     
     res_headers = ["name", "residue", "interaction_type"]
 
-    args = parse_args()
     temp_dir = tempfile.mkdtemp()
 
     # Changes config based on receptor type
@@ -158,6 +132,7 @@ if __name__ == "__main__":
     cif_files = find_first_model_files(args.directory)
     collected_data = []
     residue_data = []
+    errors = []
     for target_file in cif_files:
         # Gets the name and the model number from the .cif file.
         name, lig = extract_name_key(target_file)
@@ -210,11 +185,19 @@ if __name__ == "__main__":
                 verbose=args.verbose,
                 name=f"{name}_aligned.pdb"
             )
-            aligned_target = align.main(align_args)
-
-            vis_cmd = ["plip", "-f", aligned_target, "-y", "-o", vis_outdir]
-            subprocess.run(vis_cmd, check=True)
-
+            try:
+                aligned_target = align.main(align_args)
+            except Exception as e:
+                print(f"Alignment failed for {target_file}: {e}")
+                sys.exit(1) 
+            try:
+                vis_cmd = ["plip", "-f", aligned_target, "-y", "-o", vis_outdir]
+                subprocess.run(vis_cmd, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"PLIP failed for {target_file}: {e}")
+                errors.append(target_file)
+                continue   
+        
     csv_out = os.path.join(args.outdir, f"{args.csv_name}.csv")
     verbose_print("Writing out number of interactions...", args.verbose)
     with open(csv_out, 'w', newline='') as csvfile:
@@ -231,3 +214,31 @@ if __name__ == "__main__":
 
     # Clean up temporary directory
     shutil.rmtree(temp_dir)
+
+    return errors 
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Analyzes a collection of .cif files"
+                            "from a boltz2 workflow using PLIP and outputs" \
+                            "ligand information as well as residue interaction information" \
+                            "calculated by PLIP in a CSV.")
+    parser.add_argument("-d", "--directory", required=True,
+                        help="Root directory of .cif files for analysis.")
+    parser.add_argument("-o", "--outdir", required=True,
+                        help="Path to output directory." \
+                        "Defaults to 'compiled_plip_fprints.csv'")
+    parser.add_argument("-rt", "--receptor_type", required=True,
+                        help="Type of receptor - 'dna', 'rna', or 'protein.'", 
+                        choices=['dna', 'rna', 'protein'])
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Enable verbose output.")
+    parser.add_argument("-y", "--pymol_vis", default=False, action="store_true",
+                        help="If set, will generate pymol visualization of the interactions.")
+    parser.add_argument("-p", "--parent", required=False, default="",
+                        help="Path to the parent structure file to align to for pymol visualizations." \
+                        "Can be CIF or PDB. If not given, will not generate pymol visualizations.")
+    parser.add_argument("-n", "--csv_name", required=False, default="plip_fingerprints",
+                        help="Name of the csv files (don't include csv extension).")
+
+    args = parser.parse_args()
+    main(args)
