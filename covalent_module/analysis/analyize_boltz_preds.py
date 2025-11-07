@@ -111,7 +111,7 @@ def analyze_mean_preds(invitro_file, stats_df, score_col, exp_col, run_name=None
     return df_truth_pred, analysis_dict
 
 
-def view_plot(fig, save_path=None, show=True, close=False):
+def view_plot(fig, save_path=None, show=True, close=False, run_name=None):
     '''
     Show or save a matplotlib figure.
     :param fig: matplotlib.figure.Figure
@@ -121,15 +121,18 @@ def view_plot(fig, save_path=None, show=True, close=False):
     boltz_preds_df, analysis_dict = analyize_boltz_preds(...)
     plots = analysis_dict['plots'][0]
     fig, ax = list(plots.items())[0] 
-    show_or_save_plot(fig)
+    view_plot(fig)
 
     another eg.
     analysis_dict = analyze_mean_preds(...)
     fig, ax = analysis_dict['plots']['curves']['roc_curve']
-    show_or_save_plot(fig)
+    view_plot(fig)
     '''
+    if run_name is None:
+        run_name = 'plot.png'
+
     if save_path:
-        fig.savefig(save_path, bbox_inches='tight', dpi=300)
+        fig.savefig(os.path.join(save_path, run_name), bbox_inches='tight', dpi=300)
         print(f"✅ Saved plot to {save_path}")
 
     if show:
@@ -251,10 +254,10 @@ def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=
     fig, ax = plt.subplots(figsize=(6, 5))
 
     if curve_type == 'roc':
-        for run_name, data in systems.items():
+        for sys_name, data in systems.items():
             fpr, tpr = data['curves']['auc_roc']
             auc = data['metrics']['ROC AUC']
-            ax.plot(fpr, tpr, lw=2, label=f"{run_name} (AUC={auc:.3f})")
+            ax.plot(fpr, tpr, lw=2, label=f"{sys_name} (AUC={auc:.3f})")
 
         ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
         ax.set_xlabel("False Positive Rate")
@@ -262,10 +265,10 @@ def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=
         plt.title(f"{run_name} ROC Curves")
     
     elif curve_type == 'pr':
-        for run_name, data in systems.items():
+        for sys_name, data in systems.items():
             recall, precision = data['curves']['pr_auc']
             auc = data['metrics']['PR-AUC']
-            ax.plot(recall, precision, lw=2, label=f"{run_name} (PR-AUC={auc:.3f})")
+            ax.plot(recall, precision, lw=2, label=f"{sys_name} (PR-AUC={auc:.3f})")
 
         ax.set_xlabel("Recall")
         ax.set_ylabel("Precision")
@@ -277,7 +280,8 @@ def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=
     plt.show()
   
     if write_output:
-        fig.savefig(os.path.join(write_output, f'{run_name}_roc.png'), dpi=300, bbox_inches="tight")
+        file_name = run_name.replace(" ", "_").lower()
+        fig.savefig(os.path.join(write_output, f'{file_name}_roc.png'), dpi=300, bbox_inches="tight")
 
     if write_output is None:
         display(fig)

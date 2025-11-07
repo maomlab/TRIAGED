@@ -250,7 +250,8 @@ def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
 
     # Titles
     plt.suptitle(f"Experimental vs \n{score_col} Correlation", fontsize=12, fontweight='bold', y=1.00)
-    plt.title(f"for {run_name}", fontsize=10, color='black', y=1.00)
+    if run_name is not None:
+        plt.title(f"for {run_name}", fontsize=10, color='black', y=1.00)
 
     ax.legend()
     ax.text(
@@ -403,7 +404,8 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             ax_roc.set_xlabel("False Positive Rate")
             ax_roc.set_ylabel("True Positive Rate")
             plt.suptitle(f"ROC Curve using {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
-            plt.title(f"for {run_name}", fontsize=12, color='black', y=1.02)
+            if run_name is not None:
+                plt.title(f"for {run_name}", fontsize=12, color='black', y=1.02)
             ax_roc.legend()
             ax_roc.grid(alpha=0.3)
             figs['roc_curve'] = [fig_roc, ax_roc]
@@ -417,7 +419,8 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             ax_pr.set_xlabel("Recall")
             ax_pr.set_ylabel("Precision")
             plt.suptitle(f"Precision-Recall Curve\nusing {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
-            plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
+            if run_name is not None:
+                plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
             ax_pr.legend()
             ax_pr.grid(alpha=0.3)
             figs['pr_curve'] = [fig_pr, ax_pr]
@@ -430,7 +433,8 @@ def plot_curves(curves={}, metrics={}, run_name=None):
         #     ax_bedroc.set_xlabel("Compound Rank")
         #     ax_bedroc.set_ylabel("Cumulative Hits")
         #     plt.suptitle(f"BEDROC-like Cumulative Hit Curve\nusing {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
-        #     plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
+        #     if run_name is not None:
+        #       plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
         #     ax_bedroc.legend()
         #     ax_bedroc.grid(alpha=0.3)
         #     figs['bedroc_curve'] = [fig_bedroc, ax_bedroc]
