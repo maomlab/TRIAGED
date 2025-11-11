@@ -24,7 +24,7 @@ def get_interactions(interactions):
     interactions_vals = [num_saltbridges, num_hbonds, num_pication, num_pistack, num_halogen, num_waterbridges]
     return(interactions_vals)
 
-def get_intearcting_residues(interactions):
+def get_interacting_residues(interactions):
     """ Takes a PLIP interaction object and gets the resids for residues in all interactions. """
 
     interacting_residues = {}

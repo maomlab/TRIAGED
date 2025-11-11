@@ -7,7 +7,7 @@ from analysis_utils import *
 import matplotlib.pyplot as plt
 from IPython.display import display # for jupyter notebook 
 
-def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, exp_col, plot=False):
+def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, exp_col="IC50 (nM)", plot=False):
     '''
     Compares Boltz predictions to in vitro IC50 data and computes performance metrics.
 
@@ -47,7 +47,7 @@ def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, exp_col, plot=Fal
     analysis_dict = {}
     run_name = ': '.join(boltz_outdir.split('/')[-2:])
    
-    metrics, curves = calculate_metrics(df_truth_pred=df_truth_pred, score_col=score_col, alpha=20)
+    metrics, curves = calculate_metrics(df_truth_pred=df_truth_pred, score_col=score_col)
     analysis_dict['metrics_curves'] = [metrics, curves]
 
     if plot: 
@@ -94,7 +94,7 @@ def analyze_mean_preds(invitro_file, stats_df, score_col, exp_col, run_name=None
     stats_df.rename(columns={'mean': score_col}, inplace=True)
     df_truth_pred = pd.merge(df_truth, stats_df[["compound_id", score_col]], on="compound_id")
    
-    metrics, curves = calculate_metrics(df_truth_pred=df_truth_pred, score_col=score_col, alpha=20)
+    metrics, curves = calculate_metrics(df_truth_pred=df_truth_pred, score_col=score_col)
     analysis_dict = {
         'metrics': metrics,
         'curves': curves
@@ -144,12 +144,12 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, wri
     '''
     Plots topN ligands predicted by boltz vs topN experimentally ranked. 
     Uses truth_pred_df, analysis_dict output from analyze_mean_preds only!
-    :param topN (int): Must be less than 1 (percentage/100)
+    :param topN (int): Must be less than 1 (topN=topN%/100)
     :param write_output (str): If path given, the merged dataframe showing which ligands of topN come 
     from predicted, experimental, or both will be written to given path. Figure too will output here.
     '''
     if topN > 1:
-        print('topN must be less than 1 (percentage/100)')
+        print('topN must be less than 1 (topN=topN%/100)')
         sys.exit(1)
 
     if run_name is None:

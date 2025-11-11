@@ -2,6 +2,7 @@
 # conda env: boltz_analysis_env 
 # Adapted from Miguel Limcaoco 
 import pandas as pd
+import time 
 import matplotlib.pyplot as plt
 import numpy as np
 import math 
@@ -163,21 +164,24 @@ def process_invitro(invitro_df, score_col, threshold=1000):
 
     return pd.DataFrame(invitro_df.dropna())
 
-def enrichment_factor(df_truth_pred, score_col, x=0.10):
+def enrichment_factor(df_truth_pred, score_col, topN=0.10):
     '''
     Computes Enrichment Factor given by 
     [n_hits_x/n_x]/[n_hits_T/n_T]
     [(Total Actives in Top x%)/(Total Compounds in Top x%)]/[(Total Actives)/(Total Compounds)]
     :param score_col: Name of the column to use in ranking ligands.
     :param df_truth_pred: Pandas DataFrame with Actual and Predicted score (eg. IC50, Affinity, etc).
-    :param x: Threshold for subsetting Top x%.
+    :param topN: Threshold for subsetting Top x%.
 
     :return: List of Enrichment Factors for all Boltz prediction replicates given. 
     '''
-    df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True) # sort by the pred column, worst on top
+    if score_col == 'Pred log10(IC50)':
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True) # best on top. most negative ic50 on top
+    else: 
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
 
     n_T = len(df_sorted) # total compound in dataset
-    n_x = max(1, int(np.ceil(x * n_T))) # how many in x% of total ligands; garauntees at least 1 compound
+    n_x = max(1, int(np.ceil(topN * n_T))) # how many in x% of total ligands; garauntees at least 1 compound
     n_hits_x = df_sorted.iloc[:n_x]['label'].sum() # count actives in subset of x% ligands
     n_hits_T = df_sorted['label'].sum()# total hits in dataset
 
@@ -188,7 +192,7 @@ def enrichment_factor(df_truth_pred, score_col, x=0.10):
 def plot_enrichment(ef_dict):
     '''
     Plots enrichment vs Dataset.
-    :param ef_dict (dict): Dictionary with {'Dataset Name':[efs]} as key:value pairs.
+    :param ef_dict (dict): Dictionary with {'Dataset Name':[ef1,ef2,...]} as key:value pairs.
     :return: Enrichment vs Dataset plot. 
     '''
     categories = list(ef_dict.keys())
@@ -263,7 +267,10 @@ def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
 
 def bedroc_calc(df_truth_pred, score_col, alpha=20):
     
-    df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
+    if score_col == 'Pred log10(IC50)':
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True)
+    else:
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
 
     y_true = df_sorted['label'].values
     y_scores = df_sorted[score_col].values
@@ -281,40 +288,43 @@ def bedroc_calc(df_truth_pred, score_col, alpha=20):
     
     return bedroc, bedroc_curve
 
-def calculate_logAUC(df_truth_pred, score_col):
+def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.10):
     '''
     Computes the adjusted logAUC for a given score column.
     
     :param df_truth_pred: DataFrame, true labels and predicted scores.
     :param score_col: str, column name of predicted scores.
+    :param LOGAUC_MIN: Looks at active enrichment in top X% (default 10%)
 
     :return: float, logAUC value adjusted for random expectation.
     '''
     
-    LOGAUC_MAX = 1.0   # this should not change
-    LOGAUC_MIN = 0.001 # this can be adjusted for large datasets with strong early enrichment
-    RANDOM_LOGAUC = (LOGAUC_MAX - LOGAUC_MIN) / np.log(10) / np.log10(LOGAUC_MAX / LOGAUC_MIN)
+    LOGAUC_MAX = 1.0
+    
+    # Correct random expectation for logAUC
+    # For TPR = FPR (random), integrate in log space
+    RANDOM_LOGAUC = 0.5
+    
+    # Sort the DataFrame by scores
+    if score_col == 'Pred log10(IC50)':
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True)
+    else:
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False)
 
-    # Sort the DataFrame by scores in descending order
-    df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False)
-
-    # Compute cumulative true positive rate (TPR) and false positive rate (FPR)
+    # Compute cumulative TPR and FPR
     total_positives = df_truth_pred['label'].sum()
     total_negatives = len(df_truth_pred) - total_positives
 
     df_sorted['TPR'] = df_sorted['label'].cumsum() / total_positives
     df_sorted['FPR'] = (~df_sorted['label'].astype(bool)).cumsum() / total_negatives
 
-    # Generate points array (FPR, TPR)
     points = df_sorted[['FPR', 'TPR']].values
 
-    # Filter and normalize points
     npoints = []
     for x in points:
         if (x[0] >= LOGAUC_MIN) and (x[0] <= LOGAUC_MAX):
             npoints.append([x[0], x[1]])
 
-    # Compute log AUC
     area = 0.0
     for point2, point1 in zip(npoints[1:], npoints[:-1]):
         if point2[0] - point1[0] < 0.000001:
@@ -322,52 +332,49 @@ def calculate_logAUC(df_truth_pred, score_col):
 
         dx = point2[0] - point1[0]
         dy = point2[1] - point1[1]
-        intercept = point2[1] - (dy) / (dx) * point2[0]
+        intercept = point2[1] - (dy / dx) * point2[0]
         area += dy / np.log(10) + intercept * (np.log10(point2[0]) - np.log10(point1[0]))
 
-    # Return adjusted log AUC
-    return area / np.log10(LOGAUC_MAX / LOGAUC_MIN) - RANDOM_LOGAUC
+    normalized_area = area / np.log10(LOGAUC_MAX / LOGAUC_MIN)
+    
+    return normalized_area - RANDOM_LOGAUC
 
-def calculate_metrics(df_truth_pred, score_col, alpha=20):
+def calculate_metrics(df_truth_pred, score_col, topN=0.10):
     '''
     Computes performance metrics and curve data for a given score column.
-    
-    :param df_truth_pred: DataFrame, true labels and predicted scores.
-    :param score_col: str, column name of predicted scores.
-    :param alpha: float, BEDROC alpha parameter (default=20).
-
-    :return: tuple(dict, dict), metrics values and curve data.
     '''
-
-    df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
-
-    y_true = df_sorted['label'].values
-    y_scores = df_sorted[score_col].values
-    # EF
-    ef = enrichment_factor(df_truth_pred, score_col, x=0.10)
-
-    # ROC
     if score_col == 'Pred log10(IC50)':
-        fpr, tpr, _ = roc_curve(y_true, -y_scores)
-        roc_auc = roc_auc_score(y_true, -y_scores)
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True)
+        y_scores = -df_sorted[score_col].values 
     else:
-        fpr, tpr, _ = roc_curve(y_true, y_scores)
-        roc_auc = roc_auc_score(y_true, y_scores)
+        df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
+        y_scores = df_sorted[score_col].values 
+    y_true = df_sorted['label'].values
+
+    # EF
+    ef = enrichment_factor(df_truth_pred, score_col, topN)
+
+    # ROC   
+    fpr, tpr, _ = roc_curve(y_true, y_scores)
+    roc_auc = roc_auc_score(y_true, y_scores)
 
     # PR curve
     precision, recall, _ = precision_recall_curve(y_true, y_scores)
     pr_auc = sk_auc(recall, precision)
     avg_prec = average_precision_score(y_true, y_scores)
+    no_skill = len(y_true[y_true==1]) / len(y_true)
 
-    #BEROC
-    bedroc, bedroc_curve = bedroc_calc(df_sorted, score_col, alpha)
+    # BEDROC
+    bedroc, bedroc_curve = bedroc_calc(df_sorted, score_col, 20)
 
     # LogAUC
-    log_auc = calculate_logAUC(df_truth_pred, score_col)
+    log_auc = calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=topN)
 
+    # Prepare curves
     curves = {
         'auc_roc': (fpr, tpr),
-        'pr_auc': (recall, precision)
+        'pr_auc': (recall, precision),
+        'logauc': df_sorted[['label', score_col]]  # store sorted data for plotting
     }
     curves['bedroc'] = bedroc_curve
 
@@ -375,6 +382,8 @@ def calculate_metrics(df_truth_pred, score_col, alpha=20):
         'EF%': round(ef,3),
         'ROC AUC': round(roc_auc,3),
         'PR-AUC': round(pr_auc,3),
+        'No-Skill': round(no_skill,3),
+        'LOGAUC_MIN': topN,
         'Average Precision': round(avg_prec,3),
         'LogAUC': round(log_auc,3),
         f'BEDROC': round(bedroc,3),
@@ -383,18 +392,13 @@ def calculate_metrics(df_truth_pred, score_col, alpha=20):
 
     return metrics, curves
 
+
 def plot_curves(curves={}, metrics={}, run_name=None):
     '''
-    Plots ROC, Precision-Recall, and BEDROC (cumulative hits) curves.
-
-    :param curves: dict with keys ['auc_roc', 'pr_auc', 'bedroc'].
-    :param metrics: dict with keys ['ROC AUC', 'PR-AUC', 'Average Precision', 'BEDROC', 'Score Used'].
-    
-    :return: dict, figure and axis objects for each curve.
+    Plots ROC, Precision-Recall, and LogAUC curves.
     '''
     figs = {}
     for metric in metrics: 
-      
         if metric == 'ROC AUC':
             # --- ROC Curve ---
             fig_roc, ax_roc = plt.subplots(figsize=(6, 5))
@@ -412,6 +416,7 @@ def plot_curves(curves={}, metrics={}, run_name=None):
         
         elif metric == 'PR-AUC':
             # --- Precision-Recall Curve ---
+            no_skill = metrics['No-Skill']
             fig_pr, ax_pr = plt.subplots(figsize=(6, 5))
             recall, precision = curves['pr_auc']
             ax_pr.plot(recall, precision, color='blue', lw=2,
@@ -423,20 +428,49 @@ def plot_curves(curves={}, metrics={}, run_name=None):
                 plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
             ax_pr.legend()
             ax_pr.grid(alpha=0.3)
+            # No skill line
+            ax_pr.plot([0, 1], [no_skill, no_skill], linestyle='--', label='No Skill')
             figs['pr_curve'] = [fig_pr, ax_pr]
 
-        # elif metric == 'BEDROC':
-        #     # --- BEDROC (Cumulative Hits) Curve ---
-        #     fig_bedroc, ax_bedroc = plt.subplots(figsize=(6, 5))
-        #     x, cum_hits = curves['bedroc']
-        #     ax_bedroc.plot(x, cum_hits, color='green', lw=2, label=f"BEDROC = {metrics['BEDROC']:.3f}")
-        #     ax_bedroc.set_xlabel("Compound Rank")
-        #     ax_bedroc.set_ylabel("Cumulative Hits")
-        #     plt.suptitle(f"BEDROC-like Cumulative Hit Curve\nusing {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
-        #     if run_name is not None:
-        #       plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
-        #     ax_bedroc.legend()
-        #     ax_bedroc.grid(alpha=0.3)
-        #     figs['bedroc_curve'] = [fig_bedroc, ax_bedroc]
+        elif metric == 'LogAUC':
+            # --- LogAUC Curve ---
+            LOGAUC_MIN = metrics['LOGAUC_MIN']
+            fig_log, ax_log = plt.subplots(figsize=(6, 5))
+            df_sorted = curves['logauc'].copy()
+            score_col = metrics['Score Used']
+            if score_col == 'Pred log10(IC50)':
+                df_sorted = df_sorted.sort_values(by=score_col, ascending=True)
+            else:
+                df_sorted = df_sorted.sort_values(by=score_col, ascending=False)
+            total_positives = df_sorted['label'].sum()
+            total_negatives = len(df_sorted) - total_positives
+            df_sorted['TPR'] = df_sorted['label'].cumsum() / total_positives
+            df_sorted['FPR'] = (~df_sorted['label'].astype(bool)).cumsum() / total_negatives
+
+            LOGAUC_MAX = 1.0
+            mask = (df_sorted['FPR'] >= LOGAUC_MIN) & (df_sorted['FPR'] <= LOGAUC_MAX)
+            fpr = df_sorted.loc[mask, 'FPR']
+            tpr = df_sorted.loc[mask, 'TPR']
+
+            # plot logAUC curve
+            ax_log.plot(fpr, tpr, color='purple', lw=2, label=f"logAUC = {metrics['LogAUC']:.3f}")
+            
+            # CORRECTED: plot random expectation (TPR = FPR for random ranking)
+            # Create diagonal line from LOGAUC_MIN to LOGAUC_MAX
+            random_fpr = np.linspace(LOGAUC_MIN, LOGAUC_MAX, 100)
+            random_tpr = random_fpr  # For random: TPR = FPR
+            ax_log.plot(random_fpr, random_tpr, linestyle='--', color='gray', label='Random Expectation')
+
+            ax_log.set_xscale('log')
+            ax_log.set_xlim(LOGAUC_MIN, LOGAUC_MAX)
+            ax_log.set_ylim(0, 1)
+            ax_log.set_xlabel("Fraction of False Positives (FPR)")
+            ax_log.set_ylabel("Cumulative True Positive Rate (TPR)")
+            plt.suptitle(f"LogAUC Curve using {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
+            if run_name is not None:
+                plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
+            ax_log.legend()
+            ax_log.grid(alpha=0.3)
+            figs['logauc_curve'] = [fig_log, ax_log]
 
     return figs
