@@ -208,7 +208,7 @@ def plot_enrichment(ef_dict):
     )
 
     ax.set_xticks(x_pos)
-    ax.set_xticklabels(categories)
+    ax.set_xticklabels(categories, rotation=45, ha='right')
     ax.set_ylabel("Average EF")
     ax.set_title("Average Enrichment Factor with Error Bars")
     ax.grid(axis='y', linestyle='--', alpha=0.7)

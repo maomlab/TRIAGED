@@ -1,13 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=tgcpl_cov_smpl300_aff200
+#SBATCH --job-name=3tgcpl_cov_smpl500_aff500
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=12:00:00
+#SBATCH --time=6:00:00
 #SBATCH --account=tromeara99
 #SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
-#SBATCH --mem-per-gpu=180GB
+#SBATCH --mem-per-gpu=30GB
 #SBATCH --gres=gpu:1
 #SBATCH --array=0-27%10
 #SBATCH --output=/dev/null
@@ -32,8 +32,8 @@ sed -n "${START},${END}p" "$JOB_FILE" | while read -r YAML_PATH RECEPTOR_LIG_DIR
     boltz predict "${YAML_PATH}" \
         --out_dir "${RECEPTOR_LIG_DIR}" \
         --num_workers 8 \
-        --sampling_steps 300 \
-        --sampling_steps_affinity 200 \
+        --sampling_steps 500 \
+        --sampling_steps_affinity 500 \
         1> "${RECEPTOR_LIG_DIR}/slurm_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out" \
         2> "${RECEPTOR_LIG_DIR}/slurm_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err"
 done

@@ -72,7 +72,7 @@ def mean_metrics(boltz_reps_outdir, score_col):
     return all_pred_reps, stats 
 
 
-def analyze_mean_preds(invitro_file, stats_df, score_col, exp_col, run_name=None, plot=False):
+def analyze_mean_preds(invitro_file, stats_df, score_col, run_name=None, plot=False):
     
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
@@ -101,6 +101,7 @@ def analyze_mean_preds(invitro_file, stats_df, score_col, exp_col, run_name=None
     }
 
     if plot: 
+        exp_col = "log10(IC50)"
         scatter = affinity_scatter(df_truth_pred=df_truth_pred, run_name=run_name, score_col=score_col, exp_col=exp_col)
         curve_figs = plot_curves(run_name=run_name, curves=curves, metrics=metrics)
         analysis_dict['plots'] = {
@@ -241,23 +242,38 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, wri
         display(fig)
 
 
-def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=None):
+def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=None, colors=None):
     """
     Plot combined ROC or PR curves from multiple systems on one figure.
 
     :param systems: dict of system_name -> {'curves': {...}, 'metrics': {...}}
     :param curve_type: 'roc' or 'pr'
+    :param colors: dict mapping system names to colors, or list of colors, or None for default
     """
     if run_name is None:
         run_name = 'all_runs'
 
     fig, ax = plt.subplots(figsize=(6, 5))
 
+    # Handle colors
+    if colors is None:
+        # Use default matplotlib color cycle
+        color_list = None
+    elif isinstance(colors, dict):
+        # Colors provided as dictionary mapping system names to colors
+        color_list = [colors.get(sys_name, None) for sys_name in systems.keys()]
+    elif isinstance(colors, list):
+        # Colors provided as list
+        color_list = colors
+    else:
+        color_list = None
+
     if curve_type == 'roc':
-        for sys_name, data in systems.items():
+        for idx, (sys_name, data) in enumerate(systems.items()):
             fpr, tpr = data['curves']['auc_roc']
             auc = data['metrics']['ROC AUC']
-            ax.plot(fpr, tpr, lw=2, label=f"{sys_name} (AUC={auc:.3f})")
+            color = color_list[idx] if color_list else None
+            ax.plot(fpr, tpr, lw=2, color=color, label=f"{sys_name} (AUC={auc:.3f})")
 
         ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
         ax.set_xlabel("False Positive Rate")
@@ -265,23 +281,24 @@ def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=
         plt.title(f"{run_name} ROC Curves")
     
     elif curve_type == 'pr':
-        for sys_name, data in systems.items():
+        for idx, (sys_name, data) in enumerate(systems.items()):
             recall, precision = data['curves']['pr_auc']
             auc = data['metrics']['PR-AUC']
-            ax.plot(recall, precision, lw=2, label=f"{sys_name} (PR-AUC={auc:.3f})")
+            no_skill = data['metrics']['No-Skill']
+            color = color_list[idx] if color_list else None
+            ax.plot([0, 1], [no_skill, no_skill], linestyle='--', color=color)
+            ax.plot(recall, precision, lw=2, color=color, label=f"{sys_name} (PR-AUC={auc:.3f})")
 
         ax.set_xlabel("Recall")
         ax.set_ylabel("Precision")
         plt.title(f"{run_name} Precision-Recall Curves")
 
-    ax.legend()
+    ax.legend(bbox_to_anchor=(0.5, 1.05), loc='lower center', ncol=2)
     ax.grid(alpha=0.3)
     plt.tight_layout()
-    plt.show()
   
     if write_output:
         file_name = run_name.replace(" ", "_").lower()
-        fig.savefig(os.path.join(write_output, f'{file_name}_roc.png'), dpi=300, bbox_inches="tight")
+        fig.savefig(os.path.join(write_output, f'{file_name}_{curve_type}.png'), dpi=300, bbox_inches="tight")
 
-    if write_output is None:
-        display(fig)
+    return fig, ax
