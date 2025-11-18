@@ -204,5 +204,7 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-scripts/test_rmsd.ipynb
-scripts/__pycache__
+# ymanasa
+covalent_module/tutorial
+covalent_module/tutorial/*
+covalent_module/preprocessing/ccd_reprocess.ipynb

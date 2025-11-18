@@ -1,0 +1,17 @@
+# Auto-generated requirements for modules/triage_boltz
+pandas
+numpy
+scikit-learn
+tqdm
+matplotlib
+seaborn
+plotnine
+scipy
+statsmodels
+requests
+biopython
+rdkit
+xgboost
+shap
+gemmi
+mdtraj
