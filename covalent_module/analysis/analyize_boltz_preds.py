@@ -7,7 +7,7 @@ from analysis_utils import *
 import matplotlib.pyplot as plt
 from IPython.display import display # for jupyter notebook 
 
-def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, exp_col="IC50 (nM)", plot=False):
+def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, topN, exp_col="IC50 (nM)", plot=False):
     '''
     Compares Boltz predictions to in vitro IC50 data and computes performance metrics.
 
@@ -47,7 +47,7 @@ def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, exp_col="IC50 (nM
     analysis_dict = {}
     run_name = ': '.join(boltz_outdir.split('/')[-2:])
    
-    metrics, curves = calculate_metrics(df_truth_pred=df_truth_pred, score_col=score_col)
+    metrics, curves = calculate_metrics(topN=topN, df_truth_pred=df_truth_pred, score_col=score_col)
     analysis_dict['metrics_curves'] = [metrics, curves]
 
     if plot: 
@@ -72,7 +72,7 @@ def mean_metrics(boltz_reps_outdir, score_col):
     return all_pred_reps, stats 
 
 
-def analyze_mean_preds(invitro_file, stats_df, score_col, run_name=None, plot=False):
+def analyze_mean_preds(invitro_file, stats_df, score_col, topN, run_name=None, plot=False):
     
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
@@ -94,7 +94,7 @@ def analyze_mean_preds(invitro_file, stats_df, score_col, run_name=None, plot=Fa
     stats_df.rename(columns={'mean': score_col}, inplace=True)
     df_truth_pred = pd.merge(df_truth, stats_df[["compound_id", score_col]], on="compound_id")
    
-    metrics, curves = calculate_metrics(df_truth_pred=df_truth_pred, score_col=score_col)
+    metrics, curves = calculate_metrics(topN=topN, df_truth_pred=df_truth_pred, score_col=score_col)
     analysis_dict = {
         'metrics': metrics,
         'curves': curves
@@ -141,7 +141,7 @@ def view_plot(fig, save_path=None, show=True, close=False, run_name=None):
     if close:
         plt.close(fig)
 
-def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN=0.1, write_output=None, run_name=None):
+def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, write_output=None, run_name=None):
     '''
     Plots topN ligands predicted by boltz vs topN experimentally ranked. 
     Uses truth_pred_df, analysis_dict output from analyze_mean_preds only!
@@ -292,10 +292,56 @@ def plot_combined_curves(systems, curve_type='roc', write_output=None, run_name=
         ax.set_xlabel("Recall")
         ax.set_ylabel("Precision")
         plt.title(f"{run_name} Precision-Recall Curves")
+    
+    elif curve_type == 'logauc':
+        # Get LOGAUC_MIN from first system (assuming all use same value)
+        first_system = next(iter(systems.values()))
+        LOGAUC_MIN = first_system['metrics'].get('LOGAUC_MIN', 0.001)
+        LOGAUC_MAX = 1.0
+        
+        for idx, (sys_name, data) in enumerate(systems.items()):
+            df_sorted = data['curves']['logauc'].copy()
+            score_col = data['metrics']['Score Used']
+            
+            # Sort by scores
+            if score_col == 'Pred log10(IC50)':
+                df_sorted = df_sorted.sort_values(by=score_col, ascending=True)
+            else:
+                df_sorted = df_sorted.sort_values(by=score_col, ascending=False)
+            
+            # Compute cumulative TPR and FPR
+            total_positives = df_sorted['label'].sum()
+            total_negatives = len(df_sorted) - total_positives
+            df_sorted['TPR'] = df_sorted['label'].cumsum() / total_positives
+            df_sorted['FPR'] = (~df_sorted['label'].astype(bool)).cumsum() / total_negatives
+            
+            # Filter to range
+            mask = (df_sorted['FPR'] >= LOGAUC_MIN) & (df_sorted['FPR'] <= LOGAUC_MAX)
+            fpr = df_sorted.loc[mask, 'FPR'].values
+            tpr = df_sorted.loc[mask, 'TPR'].values
+            
+            # Get logAUC value
+            logauc = data['metrics']['LogAUC']
+            
+            # Plot
+            color = color_list[idx] if color_list else None
+            ax.plot(fpr, tpr, lw=2, color=color, label=f"{sys_name} (logAUC={logauc:.3f})")
+        
+        # Add random expectation line (only once)
+        random_fpr = np.linspace(LOGAUC_MIN, LOGAUC_MAX, 100)
+        random_tpr = random_fpr
+        ax.plot(random_fpr, random_tpr, linestyle='--', color='gray', lw=1, label='Random')
+        
+        ax.set_xscale('log')
+        ax.set_xlim(LOGAUC_MIN, LOGAUC_MAX)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel("False Positive Rate (log scale)")
+        ax.set_ylabel("True Positive Rate")
+        plt.title(f"{run_name} LogAUC Curves")
 
     ax.legend(bbox_to_anchor=(0.5, 1.05), loc='lower center', ncol=2)
     ax.grid(alpha=0.3)
-    plt.tight_layout()
+    # plt.tight_layout()
   
     if write_output:
         file_name = run_name.replace(" ", "_").lower()

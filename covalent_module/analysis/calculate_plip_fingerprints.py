@@ -168,7 +168,7 @@ def main(args):
             plip_fprint.append(val) # just appending the number of each interaction type to end of fprint list
         collected_data.append(plip_fprint)
 
-        residue_interactions = get_intearcting_residues(interactions)
+        residue_interactions = get_interacting_residues(interactions)
         for resid, interaction_type in residue_interactions.items():
             res_fprint = [name, resid, interaction_type]
             residue_data.append(res_fprint)

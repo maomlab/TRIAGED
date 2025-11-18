@@ -164,7 +164,7 @@ def process_invitro(invitro_df, score_col, threshold=1000):
 
     return pd.DataFrame(invitro_df.dropna())
 
-def enrichment_factor(df_truth_pred, score_col, topN=0.10):
+def enrichment_factor(df_truth_pred, score_col, topN):
     '''
     Computes Enrichment Factor given by 
     [n_hits_x/n_x]/[n_hits_T/n_T]
@@ -288,7 +288,7 @@ def bedroc_calc(df_truth_pred, score_col, alpha=20):
     
     return bedroc, bedroc_curve
 
-def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.10):
+def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.001):  
     '''
     Computes the adjusted logAUC for a given score column.
     
@@ -298,14 +298,10 @@ def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.10):
 
     :return: float, logAUC value adjusted for random expectation.
     '''
-    
     LOGAUC_MAX = 1.0
+    RANDOM_LOGAUC = 0.5  # This is correct for log space
     
-    # Correct random expectation for logAUC
-    # For TPR = FPR (random), integrate in log space
-    RANDOM_LOGAUC = 0.5
-    
-    # Sort the DataFrame by scores
+    # Sort by scores
     if score_col == 'Pred log10(IC50)':
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True)
     else:
@@ -318,28 +314,60 @@ def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.10):
     df_sorted['TPR'] = df_sorted['label'].cumsum() / total_positives
     df_sorted['FPR'] = (~df_sorted['label'].astype(bool)).cumsum() / total_negatives
 
-    points = df_sorted[['FPR', 'TPR']].values
-
+    # Add starting point (0,0) if not present
+    points = [[0, 0]] + df_sorted[['FPR', 'TPR']].values.tolist()
+    
+    # Filter points and ensure boundaries
     npoints = []
-    for x in points:
-        if (x[0] >= LOGAUC_MIN) and (x[0] <= LOGAUC_MAX):
-            npoints.append([x[0], x[1]])
+    for i, (fpr, tpr) in enumerate(points):
+        if fpr <= LOGAUC_MIN and i < len(points) - 1:
+            # Interpolate at LOGAUC_MIN boundary
+            next_fpr, next_tpr = points[i + 1]
+            if next_fpr > LOGAUC_MIN:
+                # Linear interpolation
+                t = (LOGAUC_MIN - fpr) / (next_fpr - fpr)
+                interp_tpr = tpr + t * (next_tpr - tpr)
+                npoints.append([LOGAUC_MIN, interp_tpr])
+        
+        if LOGAUC_MIN <= fpr <= LOGAUC_MAX:
+            npoints.append([fpr, tpr])
+        
+        if fpr >= LOGAUC_MAX:
+            break
 
+    # Ensure we have LOGAUC_MAX endpoint
+    if npoints[-1][0] < LOGAUC_MAX:
+        # Interpolate to LOGAUC_MAX
+        last_fpr, last_tpr = npoints[-1]
+        if len(points) > len(npoints):
+            # Find next point beyond our range
+            idx = len(npoints)
+            if idx < len(points):
+                next_fpr, next_tpr = points[idx]
+                t = (LOGAUC_MAX - last_fpr) / (next_fpr - last_fpr)
+                interp_tpr = last_tpr + t * (next_tpr - last_tpr)
+                npoints.append([LOGAUC_MAX, interp_tpr])
+
+    # Integration in log space
     area = 0.0
     for point2, point1 in zip(npoints[1:], npoints[:-1]):
-        if point2[0] - point1[0] < 0.000001:
+        if point2[0] <= point1[0] or point2[0] < 1e-10:  # Avoid log(0)
             continue
 
         dx = point2[0] - point1[0]
         dy = point2[1] - point1[1]
-        intercept = point2[1] - (dy / dx) * point2[0]
-        area += dy / np.log(10) + intercept * (np.log10(point2[0]) - np.log10(point1[0]))
+        slope = dy / dx
+        intercept = point2[1] - slope * point2[0]
+        
+        # Area under line segment in log space
+        area += slope * (point2[0] - point1[0]) + intercept * (np.log10(point2[0]) - np.log10(point1[0]))
 
+    # Normalize
     normalized_area = area / np.log10(LOGAUC_MAX / LOGAUC_MIN)
     
     return normalized_area - RANDOM_LOGAUC
 
-def calculate_metrics(df_truth_pred, score_col, topN=0.10):
+def calculate_metrics(df_truth_pred, score_col, topN):
     '''
     Computes performance metrics and curve data for a given score column.
     '''
@@ -433,44 +461,63 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             figs['pr_curve'] = [fig_pr, ax_pr]
 
         elif metric == 'LogAUC':
-            # --- LogAUC Curve ---
             LOGAUC_MIN = metrics['LOGAUC_MIN']
+            LOGAUC_MAX = 1.0
+            
             fig_log, ax_log = plt.subplots(figsize=(6, 5))
             df_sorted = curves['logauc'].copy()
             score_col = metrics['Score Used']
+            
             if score_col == 'Pred log10(IC50)':
                 df_sorted = df_sorted.sort_values(by=score_col, ascending=True)
             else:
                 df_sorted = df_sorted.sort_values(by=score_col, ascending=False)
+            
             total_positives = df_sorted['label'].sum()
             total_negatives = len(df_sorted) - total_positives
             df_sorted['TPR'] = df_sorted['label'].cumsum() / total_positives
             df_sorted['FPR'] = (~df_sorted['label'].astype(bool)).cumsum() / total_negatives
 
-            LOGAUC_MAX = 1.0
-            mask = (df_sorted['FPR'] >= LOGAUC_MIN) & (df_sorted['FPR'] <= LOGAUC_MAX)
-            fpr = df_sorted.loc[mask, 'FPR']
-            tpr = df_sorted.loc[mask, 'TPR']
+            # Filter to range and ensure we capture boundary crossings
+            mask = (df_sorted['FPR'] >= LOGAUC_MIN * 0.5) & (df_sorted['FPR'] <= LOGAUC_MAX * 1.1)  # Slightly wider
+            df_plot = df_sorted.loc[mask].copy()
+            
+            # Interpolate at exact boundaries if needed
+            if df_plot['FPR'].min() > LOGAUC_MIN:
+                # Add interpolated point at LOGAUC_MIN
+                idx_before = df_sorted[df_sorted['FPR'] < LOGAUC_MIN].index[-1]
+                idx_after = df_sorted[df_sorted['FPR'] >= LOGAUC_MIN].index[0]
+                
+                fpr1, tpr1 = df_sorted.loc[idx_before, ['FPR', 'TPR']]
+                fpr2, tpr2 = df_sorted.loc[idx_after, ['FPR', 'TPR']]
+                
+                t = (LOGAUC_MIN - fpr1) / (fpr2 - fpr1)
+                interp_tpr = tpr1 + t * (tpr2 - tpr1)
+                
+                new_row = pd.DataFrame({'FPR': [LOGAUC_MIN], 'TPR': [interp_tpr]})
+                df_plot = pd.concat([new_row, df_plot]).sort_values('FPR')
 
-            # plot logAUC curve
+            fpr = df_plot['FPR'].values
+            tpr = df_plot['TPR'].values
+
+            # Plot logAUC curve
             ax_log.plot(fpr, tpr, color='purple', lw=2, label=f"logAUC = {metrics['LogAUC']:.3f}")
             
-            # CORRECTED: plot random expectation (TPR = FPR for random ranking)
-            # Create diagonal line from LOGAUC_MIN to LOGAUC_MAX
-            random_fpr = np.linspace(LOGAUC_MIN, LOGAUC_MAX, 100)
-            random_tpr = random_fpr  # For random: TPR = FPR
-            ax_log.plot(random_fpr, random_tpr, linestyle='--', color='gray', label='Random Expectation')
+            # Random expectation (TPR = FPR)
+            random_fpr = np.logspace(np.log10(LOGAUC_MIN), np.log10(LOGAUC_MAX), 100)
+            random_tpr = random_fpr
+            ax_log.plot(random_fpr, random_tpr, linestyle='--', color='gray', label='Random')
 
             ax_log.set_xscale('log')
             ax_log.set_xlim(LOGAUC_MIN, LOGAUC_MAX)
             ax_log.set_ylim(0, 1)
-            ax_log.set_xlabel("Fraction of False Positives (FPR)")
-            ax_log.set_ylabel("Cumulative True Positive Rate (TPR)")
+            ax_log.set_xlabel("False Positive Rate (log scale)")
+            ax_log.set_ylabel("True Positive Rate")
             plt.suptitle(f"LogAUC Curve using {metrics['Score Used']}", fontsize=12, fontweight='bold', y=1.00)
             if run_name is not None:
                 plt.title(f"for {run_name}", fontsize=10, color='black', y=0.99)
             ax_log.legend()
-            ax_log.grid(alpha=0.3)
+            ax_log.grid(alpha=0.3, which='both')
             figs['logauc_curve'] = [fig_log, ax_log]
 
     return figs
