@@ -206,4 +206,5 @@ cython_debug/
 
 # ymanasa
 covalent_module/tutorial
+covalent_module/tutorial/*
 covalent_module/preprocessing/ccd_reprocess.ipynb
