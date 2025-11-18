@@ -1,5 +1,4 @@
 import os
-<<<<<<< HEAD:scripts/fasta_utils.py
 import re
 import csv
 import requests
@@ -7,13 +6,6 @@ from pdb_to_fasta import residue_to_one_letter
 from covalent_utils import get_link_atoms
 
 def fetch_fasta(pdb_id):
-=======
-import csv
-import requests
-from covalent_utils import get_link_atoms
-
-def fetch_fasta_from_pdb(pdb_id: str) -> str:
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
     """
     Fetches and returns the header anad FASTA sequence(s) for a given PDB ID from RCSB PDB.
     """
@@ -26,13 +18,11 @@ def fetch_fasta_from_pdb(pdb_id: str) -> str:
         raise ValueError(f"Failed to fetch FASTA for PDB ID {pdb_id}: {response.status_code}")
 
 
-<<<<<<< HEAD:scripts/fasta_utils.py
-def build_sequence(pdb_file, chain_id):
+def build_sequence_for_chain(pdb_file, chain_id):
     """
-    Converts a PDB file to a sequence and gives the PDB idx of each residue as well as the literal index.
+    Converts a PDB file to a sequence for a given chain.
 
     :param pdb_file: Path to PDB file.
-    :param records_csv: Path to CSV of CovalentInDB2.0 Database with information regarding positions of the covalent bond.
 
     :return sequence: string of the protein sequence for the ligand interacting chain.
     """
@@ -53,11 +43,7 @@ def build_sequence(pdb_file, chain_id):
 
     return sequence 
 
-
 def read_csv_pdbs(csv_path='/home/ymanasa/turbo/ymanasa/opt/boltz/covalent_testing/cov_indb2.csv'):
-=======
-def read_csv_pdbs(csv_path: str) -> list:
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
     """
     Reads a CSV file and returns a list of PDB IDs from the 'PDB' column.
     """
@@ -69,11 +55,7 @@ def read_csv_pdbs(csv_path: str) -> list:
 
     return pdb_list 
 
-<<<<<<< HEAD:scripts/fasta_utils.py
 def build_fasta_dict(pdb_list):
-=======
-def build_fasta_dict(pdb_list: list) -> dict[str, str]:
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
     """
     Fetches FASTA sequences for a list of PDB IDs and stores them in a dictionary.
 
@@ -88,11 +70,7 @@ def build_fasta_dict(pdb_list: list) -> dict[str, str]:
 
     for pdb in pdb_list:
         try:
-<<<<<<< HEAD:scripts/fasta_utils.py
             fasta = fetch_fasta(pdb)
-=======
-            fasta = fetch_fasta_from_pdb(pdb)
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
             fasta_dict[pdb] = fasta
             print(pdb)
         except Exception as e:
@@ -100,19 +78,11 @@ def build_fasta_dict(pdb_list: list) -> dict[str, str]:
 
     return fasta_dict
 
-<<<<<<< HEAD:scripts/fasta_utils.py
 def build_fasta_seq(pdb_id):
     """
     Returns fasta sequences of all chains as a single string which can be used as input for Boltz inference. 
     """
     fasta = fetch_fasta(pdb_id)
-=======
-def build_fasta_seq(pdb_id: str) -> str:
-    """
-    Returns fasta sequences of all chains as a single string which can be used as input for Boltz inference. 
-    """
-    fasta = fetch_fasta_from_pdb(pdb_id)
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
     list_fasta = fasta.split('\n')
     final_fasta = ''
     for i in list_fasta:
@@ -121,11 +91,7 @@ def build_fasta_seq(pdb_id: str) -> str:
 
     return final_fasta
 
-<<<<<<< HEAD:scripts/fasta_utils.py
 def build_covalent_chains_dict(pdb_list, pdb_dirs):
-=======
-def build_covalent_chains_dict(pdb_list: list[str], pdb_dirs: str) -> dict[str, tuple]:
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
     """
     Extracts protein-ligand interaction information from LINK records in PDB files.
     Parameters:
@@ -154,11 +120,7 @@ def build_covalent_chains_dict(pdb_list: list[str], pdb_dirs: str) -> dict[str, 
     return prot_chains
 
 
-<<<<<<< HEAD:scripts/fasta_utils.py
 def build_fasta_dict_for_cov_inference(fasta_dict, prot_chains):
-=======
-def build_fasta_dict_for_cov_inference(fasta_dict: dict, prot_chains: dict) -> tuple:
->>>>>>> origin:modules/triage_boltz/fasta_utils.py
     """
     Extracts the amino acid sequence of the protein chain that covalently interacts 
     with the ligand for each PDB entry, filtering out peptide ligands.
