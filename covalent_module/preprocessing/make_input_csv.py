@@ -1,30 +1,12 @@
 import os
 import csv
 import pandas as pd 
-import argparse
-import subprocess
+import tempfile
+from dotenv import load_dotenv
 from .pdb_to_fasta import residue_to_three_letter, build_sequence
-from .covalent_utils import verify_covalent, residue_cov_atom, remove_leaving_group
-from .covalent_utils import process_covalent_smiles
+from .covalent_utils import verify_covalent, residue_cov_atom, remove_leaving_group, process_covalent_smiles, lookup_compound_id, unique_ccd
 
-# tested last: 10/03/25 in test/
 # use ccd_pkl env
-def ensure_environment_variables():
-    '''
-    Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
-    '''
-    setup_script = os.path.join(os.path.dirname(__file__), "/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/setup_enviorment.sh")
-    
-    command = f"bash -c 'source {setup_script} && env'"
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash")
-    output, _ = proc.communicate()
-    
-    for line in output.decode().splitlines():
-        key, _, value = line.partition("=")
-        os.environ[key] = value
-
-    print("Environment variables set successfully.")
-
 def validate_file(filename):
     ''' Validates if the file is either a PDB or a TXT file.'''
     valid_exts = {".pdb", ".txt"}
@@ -37,6 +19,7 @@ def validate_file(filename):
 
 def process_protein(pdb, idx, lig_chain):
     '''Returns protein information.'''
+    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
     ext = validate_file(pdb)
     if ext==".pdb":
         sequence = build_sequence(pdb, lig_chain)
@@ -52,40 +35,63 @@ def process_protein(pdb, idx, lig_chain):
         res_aa = sequence[idx-1]
 
     res_name = residue_to_three_letter(res_aa)
-    print("Boltz will now dock to this residue: ", res_name)
+    if VERBOSE: print("Boltz will now dock to this residue: ", res_name)
 
     if verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
-        print(sequence)
+        if VERBOSE: print(sequence)
         raise ValueError(f"[ERROR] res_idx {idx} does NOT map to a covalent residue. " \
         "Please verify res_idx matches expected residue in sequence.")
     
     res_atom = residue_cov_atom(res_name)
     return sequence, res_name, res_atom
 
-def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
+def generate_csv(name, prot_file, res_idx, lig_chain, out_csv, ccd_db):
     '''Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking.'''
-    
-    validate_file(prot_file) # check if either txt or pdb
-    
-    with open(lig_csv, 'r') as lig:
-        reader = csv.reader(lig)
-        ligands = [(row[0], row[1]) for row in reader if row]  # gives [("lig1", "SMILES1"), ("lig2", "SMILES2"), ...]
+    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
+    COMPOUND_RECORD = os.environ.get("COMPOUND_RECORD", None) # none if user does not want to pass ligand id records 
+    LIG_CSV = os.environ.get("LIGAND_CSV")
 
+    ## protein processing
     seq, res_name, res_atom = process_protein(prot_file, res_idx, lig_chain)
+    
+    ## ligand processing
+    with open(LIG_CSV, 'r') as lig:
+        reader = csv.reader(lig)
+        header = next(reader)  
+        name_idx = header.index('vault_id')
+        smiles_idx = header.index('SMILES')
+        
+        ligands = [(row[name_idx], row[smiles_idx]) for row in reader if row]
 
+    # initiate compound_records df
+    if COMPOUND_RECORD is None:
+        if VERBOSE: print("Compound Records not Found! Writing new one...")
+        compound_rec_df = pd.DataFrame(columns=['vault_id', 'compound_id'])
+        new_rows_list = [{'vault_id': name, 'compound_id': 'XXXXXXX'} for name, _ in ligands]
+        compound_rec_copy = pd.concat([compound_rec_df, pd.DataFrame(new_rows_list)], ignore_index=True)
+    else:
+        # check cols in cmpd_rec and reads
+        cmp_rec = pd.read_csv(COMPOUND_RECORD, nrows=0).columns
+        missing_cols = [c for c in ['vault_id', 'compound_id'] if c not in cmp_rec]
+        if missing_cols:
+            raise ValueError(f"COMPOUND_RECORD is missing expected columns: {missing_cols}")
+        compound_rec_df = pd.read_csv(COMPOUND_RECORD)
+        compound_rec_copy = compound_rec_df.copy(deep=True)
+
+    ## writing output csv for yaml making
     if os.path.exists(out_csv):
-        print(f"[WARNING] Output CSV '{out_csv}' already exists. Deleting and rewriting.")
+        if VERBOSE: print(f"[WARNING] Output CSV '{out_csv}' already exists. Deleting and rewriting.")
         os.remove(out_csv)
 
-    expected_header = ["SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
-    # writing header if needed
+    expected_header = ["SMILES", "compound_id", "vault_id" ,"WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
+    # write header once
     write_header = True
     if os.path.exists(out_csv):
         with open(out_csv, "r") as existing:
             reader = csv.reader(existing)
             first_row = next(reader, None)
             if first_row == expected_header:
-                write_header = False  # don’t rewrite header
+                write_header = False  # won't rewrite header
 
     with open(out_csv, 'a') as f:
         writer = csv.writer(f)
@@ -93,29 +99,25 @@ def generate_csv(name, prot_file, res_idx, lig_chain, lig_csv, out_csv, ccd_db):
             writer.writerow(expected_header)
         # for each ligand, append the protein information, assuming one protein target 
         for lig in ligands:
-            id = lig[0]
+            vault_id = lig[0]
+            # matches vault_id to unqiue compound_id
+            compound_id = lookup_compound_id(vault_id, compound_rec_copy) 
+            if compound_id is None or len(compound_id) > 5: 
+                # get unique 5 char compound_id
+                compound_id = unique_ccd(ccd_db=ccd_db, len=5)
+                compound_rec_copy.loc[len(compound_rec_copy)] = {"vault_id": vault_id, "compound_id": compound_id}
+            elif len(vault_id) <= 5 and compound_id is None: # case where vault_id is valid 
+                compound_id = vault_id
+                compound_rec_copy.loc[len(compound_rec_copy)] = {"vault_id": vault_id, "compound_id": compound_id}
+            elif compound_id is not None and len(compound_id) <= 5: # case where compound_id is valid
+                # no need to update the record 
+                compound_id = compound_id
+
             smiles_no_lg, lig_atom, wh_type = remove_leaving_group(lig[1])
-            ccd = process_covalent_smiles(ccd_db, smiles_no_lg, compound_id=id) # makes pkl file 
-            writer.writerow([smiles_no_lg, ccd, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
-        
-def main():
-    parser = argparse.ArgumentParser(description="Generates CSV required for input into setup_cov_job.py with information required by Boltz2 for covalent docking. " \
-                                     "Processes ligands and makes required files for Boltz2." \
-                                     "Assumes one protein target. Consult README for input format inforamtion.")
-    parser.agg_argument("-n", "--name", type=str, required=True, help="Name of protein. Used for naming output files.")
-    parser.add_argument("-p","--prot_file", type=str, required=True, help="Path to either a PDB file or a TXT file with a single chain sequence.")
-    parser.add_argument("-r", "--res_idx", type=int, required=True, help="Index of the residue to be covalently targeted by a covalent ligand. Starting at 1.")
-    parser.add_argument("-g", "--lig_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
-    parser.add_argument("-l","--lig_csv", type=str, required=True, help="Path to CSV with Ligand info.")
-    parser.add_argument("-o","--out_csv", type=str, required=True, help="Path to output CSV. Will be formatted to work with setup_cov_job.py.")
 
-    args = parser.parse_args()
+            # makes pkl file if dne
+            process_covalent_smiles(ccd_db, smiles_no_lg, compound_id) 
+            writer.writerow([smiles_no_lg, compound_id, vault_id, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
 
-    ensure_environment_variables()
-    ccd_db = os.getenv("CCD_DB")
-
-    generate_csv(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_csv=args.lig_csv, out_csv=args.out_csv, ccd_db=ccd_db)
-
-if __name__ == "__main__":
-    main()
-    
+    # need to update records 
+    compound_rec_copy.to_csv(COMPOUND_RECORD, index=False)  

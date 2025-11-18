@@ -6,34 +6,14 @@ import subprocess
 import argparse
 from rdkit import Chem
 
-# tested last: 10/03/25 in test_yamls/
 # use ccd_pkl env
 
-def ensure_environment_variables():
-    '''
-    Ensures necessary environment variables are set. If not, runs setup_enviorment.sh.
-    '''
-    setup_script = os.path.join(os.path.dirname(__file__), "/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/setup_enviorment.sh")
-    
-    command = f"bash -c 'source {setup_script} && env'"
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True, executable="/bin/bash")
-    output, _ = proc.communicate()
-    
-    for line in output.decode().splitlines():
-        key, _, value = line.partition("=")
-        os.environ[key] = value
-
-    print("Environment variables set successfully.")
-
-def check_smiles(smiles: str, verbose: bool = False):
+def check_smiles(smiles: str):
     '''
     Attempts to load and sanitize a SMILES string using RDKit.
     Returns a canonicalized SMILES string if successful, otherwise None.
-    
     :param smiles: str 
         The input SMILES string.
-    :param verbose: bool
-        If True, print debug messages on failure.
 
     :return: str or None
         A valid, canonical SMILES or None if the molecule is invalid.
@@ -42,8 +22,7 @@ def check_smiles(smiles: str, verbose: bool = False):
         # Attempt to parse without sanitizing
         mol = Chem.MolFromSmiles(smiles, sanitize=False)
         if mol is None:
-            if verbose:
-                print(f"[ERROR] MolFromSmiles failed for: {smiles}")
+            print(f"[ERROR] MolFromSmiles failed for: {smiles}")
             return None
         
         # Attempt sanitization (includes valence check, aromaticity, Hs)
@@ -53,31 +32,28 @@ def check_smiles(smiles: str, verbose: bool = False):
         return Chem.MolToSmiles(mol, canonical=True)
 
     except Exception as e:
-        if verbose:
-            print(f"[ERROR] Sanitization failed for SMILES: {smiles}\n{e}")
+        print(f"[ERROR] Sanitization failed for SMILES: {smiles}\n{e}")
         return None
 
 class LiteralList(list):
         pass
+    
 def literal_list_representer(dumper, data):
     return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
 yaml.add_representer(LiteralList, literal_list_representer)
 
-def create_boltz_yamls(csv_file, output_dir, msa=None):
+def create_boltz_yamls(csv_file, output_dir, msa_path):
     '''
-    Creates .yaml files based on the input CSV.
-    :param csv_file: str
-        Path to the input CSV file. 
-    :param output_dir: str
-        Path to the output directory.
-    :param msa_path: str or None
-        Optional path to MSA file in a3m format. If provided, will be added to yaml.
+    Creates YAML files from a CSV of ligands and proteins.
 
-    :return: path to last yaml file created
+    :param csv_file: Path to input CSV file
+    :param output_dir: Directory to write YAML files
+    :param msa_path: Optional path to MSA file
+
+    :return: List of paths to created YAML files
     '''
-    # Ensure environment variables are set
-    ensure_environment_variables()
-    ccd_db = os.getenv("CCD_DB") 
+    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
+    CCD_DB = os.environ.get("CCD_DB", output_dir)
 
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
@@ -88,25 +64,26 @@ def create_boltz_yamls(csv_file, output_dir, msa=None):
     
     # load csv and check columns
     csvfile = pd.read_csv(csv_file)
-    required_columns = {"SMILES", "CCD", "WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"}
+    required_columns = {"SMILES", "compound_id", "vault_id" ,"WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"}
     missing = required_columns - set(csvfile.columns)
     if missing:
-        print(f"[ERROR] CSV file is missing these columns: {missing}")
+        print(f"[ERROR] CSV file is missing these columns: {missing}. \
+              Use make_input_csv.py to generate the correct format.")
         sys.exit(1)
 
     invalid_compounds = []
     yaml_files = []
     for _, row in csvfile.iterrows(): # per ligand yaml is made 
         # ligand info 
-        ccd = row["CCD"]
+        ccd = row["compound_id"]
         smiles = row["SMILES"]
-        smiles = check_smiles(smiles, verbose=True) # returns conancial smiles or None
+        smiles = check_smiles(smiles) # returns conancial smiles or None
         if smiles is None:
-            print(f"Invalid SMILES for compound ID {ccd}: {row['SMILES']}")
+            print(f"[ERROR] Invalid SMILES for compound ID {ccd}: {row['SMILES']}")
             invalid_compounds.append(ccd)
             continue
         # check if ccd pkl file exists
-        ccd_file = os.path.join(ccd_db, f"{ccd}.pkl")
+        ccd_file = os.path.join(CCD_DB, f"{ccd}.pkl")
         if not os.path.isfile(ccd_file):
             print(f"[ERROR] '{ccd_file}' does not exist for {ccd}. \
                   Please use preprocessing script (/preprocessing/make_input_csv.py) to generate it.")
@@ -127,8 +104,8 @@ def create_boltz_yamls(csv_file, output_dir, msa=None):
             "modification": [{"position": int(res_idx), "ccd": res_name}],
         }
 
-        if msa is not None:
-            protein_data["msa"] = msa
+        if msa_path is not None:
+            protein_data["msa"] = msa_path
 
         data = {
             "sequences": [
@@ -147,7 +124,7 @@ def create_boltz_yamls(csv_file, output_dir, msa=None):
                 {"affinity": {"binder": "LIG"}}
             ],
         }
-        yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml") # should be unique for each ligand
+        yaml_file = os.path.join(output_dir, f"{pdb_name}_{ccd}.yaml") # should be unique for each ligand and less than 5 char
         with open(yaml_file, "w") as f:
             yaml.safe_dump(
                 data, 
@@ -163,20 +140,5 @@ def create_boltz_yamls(csv_file, output_dir, msa=None):
     if invalid_compounds:
         print(f"[WARNING] The following compound IDs were skipped: {invalid_compounds}")
 
-    print("[DONE] yamls were written in", output_dir)
-
+    if VERBOSE: print("[DONE] yamls were written in", output_dir)
     return yaml_files # list of all yamls created 
-
-def main():
-    parser = argparse.ArgumentParser(description="Creates YAML files for covalent docking with Boltz2 in output_dir/. Refer to README.md for csv format.")
-    parser.add_argument("-i","--input_csv_file", type=str, required=True,help="Path to the input CSV file.")
-    parser.add_argument("-o","--output_directory", type=str, required=True,help="Path to the output directory for generated yamls.")
-    parser.add_argument("-m", "--msa", type=str, required=False, help="Path to MSA file in csv format. If provided, will be added to yaml.", default=None)
-
-    args = parser.parse_args()
-
-    create_boltz_yamls(csv_file=args.input_csv_file, output_dir=args.output_directory)
-
-if __name__ == "__main__":
-    main()
-    
