@@ -1,0 +1,19 @@
+MSA server enabled: https://api.colabfold.com
+MSA server authentication: no credentials provided
+Checking input data.
+Processing 1 inputs with 1 threads.
+Generating MSA for covalent_scripts/test/5MAJ/5MAJ_7BLKD/5MAJ_7BLKD.yaml with 1 protein entities.
+Calling MSA server for target 5MAJ_7BLKD with 1 sequences
+MSA server URL: https://api.colabfold.com
+MSA pairing strategy: greedy
+No authentication provided for MSA server
+Running structure prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:15<00:00,  0.06it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:15<00:00,  0.06it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |          | 0/? [00:00<?, ?it/s]Predicting:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|          | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|██████████| 1/1 [00:25<00:00,  0.04it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|██████████| 1/1 [00:25<00:00,  0.04it/s]

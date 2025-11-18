@@ -6,20 +6,12 @@ This script sets up Boltz job directories and generates `.yaml` files based on t
 
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-<<<<<<< HEAD:scripts/README.md
 | `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information.              |
 | `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
 | `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |
 | `--num_jobs`           | `int`   | No       | How may parallel submission directories and slurm submit scripts to generate depending on avaliable gpus      |
 | `--protein_nmers`      | `int`   | No       | How many subunits to model the receptor if it is a multimer                                                   |
-=======
-| `--input_csv_file`     | `str`   | No       | Path to the input CSV file containing biomolecular entities. Required for non-covalent docking.               |
-| `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
-| `--num_jobs`           | `int`   | No       | Number of parallel submission directories and SLURM scripts to generate. Default is 1.                        |
-| `--covalent_docking`   | `bool`  | No       | Whether ligand must covalently interact with the protein.                                                     |
-| `--name`               | `str`   | Yes      | Name of the receptor, used for naming SLURM scripts.                                                         |
->>>>>>> origin:modules/triage_boltz/README.md
 
 #### Example Usage
 
@@ -287,10 +279,18 @@ By default, if a parent is specified, it will be the first model in the written 
 
 ```bash
 <<<<<<< HEAD:scripts/README.md
+<<<<<<< HEAD:scripts/README
+=======
+<<<<<<< HEAD:scripts/README.md
+>>>>>>> origin:modules/triage_boltz/README.md
 python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb```
 =======
 python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb
 ```
+<<<<<<< HEAD:scripts/README.md
+>>>>>>> master:scripts/README.md
+=======
+>>>>>>> origin:modules/triage_boltz/README.md
 >>>>>>> origin:modules/triage_boltz/README.md
 
 
