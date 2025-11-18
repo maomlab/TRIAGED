@@ -1,4 +1,0 @@
-covalent_scripts/test/5MAJ/5MAJ_7BLKD/5MAJ_7BLKD.yaml covalent_scripts/test/5MAJ/5MAJ_7BLKD
-covalent_scripts/test/5MAJ/5MAJ_Y7FCI/5MAJ_Y7FCI.yaml covalent_scripts/test/5MAJ/5MAJ_Y7FCI
-covalent_scripts/test/5MAJ/5MAJ_1862Y/5MAJ_1862Y.yaml covalent_scripts/test/5MAJ/5MAJ_1862Y
-covalent_scripts/test/5MAJ/5MAJ_4XW07/5MAJ_4XW07.yaml covalent_scripts/test/5MAJ/5MAJ_4XW07
