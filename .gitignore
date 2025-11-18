@@ -205,3 +205,5 @@ cython_debug/
 .cursorindexingignore
 scripts/test_rmsd.ipynb
 
+#ymanasa
+covalent_module/tutorial/
