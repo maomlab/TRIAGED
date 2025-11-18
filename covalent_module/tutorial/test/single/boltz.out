@@ -1,0 +1,15 @@
+MSA server enabled: https://api.colabfold.com
+MSA server authentication: no credentials provided
+Checking input data.
+All inputs are already processed.
+Processing 0 inputs with 0 threads.
+Running structure prediction for 1 input.
+Predicting: |                                                                                                                        | 0/? [00:00<?, ?it/s]Predicting:   0%|                                                                                                                    | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|                                                                                                       | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:20<00:00,  0.05it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:20<00:00,  0.05it/s]
+
+Predicting property: affinity
+
+Checking input data for affinity.
+Running affinity prediction for 1 input.
+Predicting: |                                                                                                                        | 0/? [00:00<?, ?it/s]Predicting:   0%|                                                                                                                    | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0:   0%|                                                                                                       | 0/1 [00:00<?, ?it/s]Predicting DataLoader 0: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:35<00:00,  0.03it/s]Number of failed examples: 0
+Predicting DataLoader 0: 100%|███████████████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:35<00:00,  0.03it/s]

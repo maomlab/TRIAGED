@@ -1,0 +1,24 @@
+sequences:
+-   protein:
+        id: A
+        sequence: APRSVDWREKGYVTPVKNQGQCGSCWAFSATGALEGQMFRKTGRLISLSEQNLVDCSGPQGNEGCNGGLMDYAFQYVQDNGGLDSEESYPYEATEESCKYNPKYSVANDTGFVDIPKQEKALMKAVATVGPISVAIDAGHESFLFYKEGIYFEPDCSSEDMDHGVLVVGYGFESTSDNNKYWLVKNSWGEEWGMGGYVKMAKDRRNHCGIASAASYPTV
+        modification:
+        -   position: 25
+            ccd: CYS
+        msa: /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/example_input/5MAJ_msa.csv
+-   ligand:
+        id: LIG
+        ccd: FGDY1
+constraints:
+-   bond:
+        atom1:
+        - A
+        - 25
+        - SG
+        atom2:
+        - LIG
+        - 1
+        - C1
+properties:
+-   affinity:
+        binder: LIG
