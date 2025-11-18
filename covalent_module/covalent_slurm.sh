@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=3tgcpl_cov_smpl500_aff500
+#SBATCH --job-name=test_env_tgcpl
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=6:00:00
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-gpu=30GB
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-27%10
+#SBATCH --array=0-2%2
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
