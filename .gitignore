@@ -203,7 +203,8 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
-scripts/test_rmsd.ipynb
 
-#ymanasa
-covalent_module/tutorial/
+# ymanasa
+covalent_module/tutorial
+covalent_module/tutorial/*
+covalent_module/preprocessing/ccd_reprocess.ipynb
