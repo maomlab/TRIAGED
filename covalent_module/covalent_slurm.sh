@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=test_env_tgcpl
+#SBATCH --job-name=tgcpl_20251117_cov_rep3
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=00:01:00
@@ -9,7 +9,7 @@
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-gpu=30GB
 #SBATCH --gres=gpu:1
-#SBATCH --array=0-2%2
+#SBATCH --array=0
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
@@ -17,7 +17,7 @@ conda activate boltz2
 module load cuda cudnn
 
 JOB_FILE="$1"
-LINES_PER_TASK=10   # number of YAMLs per array task
+LINES_PER_TASK=18   # number of YAMLs per array task
 
 # Calculate starting line for this array task
 START=$(( SLURM_ARRAY_TASK_ID * LINES_PER_TASK + 1 ))
