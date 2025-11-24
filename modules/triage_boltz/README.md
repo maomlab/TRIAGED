@@ -6,26 +6,17 @@ This script sets up Boltz job directories and generates `.yaml` files based on t
 
 | Argument               | Type    | Required | Description                                                                                                   |
 |------------------------|---------|----------|---------------------------------------------------------------------------------------------------------------|
-<<<<<<< HEAD:scripts/README.md
 | `--input_csv_file`     | `str`   | Yes      | Path to the input CSV file containing compound information.              |
 | `--input_pdb_file`     | `str`   | No       | Path to the input PDB file containing protein structure.                                                      |
 | `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
 | `--input_fasta_file`   | `str`   | No       | Path to the input fasta file containing sequence, if inputed will be used over the pdb file                   |
 | `--num_jobs`           | `int`   | No       | How may parallel submission directories and slurm submit scripts to generate depending on avaliable gpus      |
 | `--protein_nmers`      | `int`   | No       | How many subunits to model the receptor if it is a multimer                                                   |
-=======
-| `--input_csv_file`     | `str`   | No       | Path to the input CSV file containing biomolecular entities. Required for non-covalent docking.               |
-| `--output_directory`   | `str`   | Yes      | Path to the output directory where `.yaml` files will be created.                                             |
-| `--num_jobs`           | `int`   | No       | Number of parallel submission directories and SLURM scripts to generate. Default is 1.                        |
-| `--covalent_docking`   | `bool`  | No       | Whether ligand must covalently interact with the protein.                                                     |
-| `--name`               | `str`   | Yes      | Name of the receptor, used for naming SLURM scripts.                                                         |
->>>>>>> origin:modules/triage_boltz/README.md
 
 #### Example Usage
 
 For a simple virtual screen:
 ```bash
-<<<<<<< HEAD:scripts/README.md
 python setup_boltz_job.py --input_csv_file /path/to/input.csv --input_pdb_file /path/to/input.pdb --output_directory /path/to/output_directory
 ```
 optionally you can forgo the pdb file and just give the fasta file when using non-covelant docking:
@@ -45,43 +36,10 @@ An example real life command:
 ```bash
 python setup_boltz_job.py -i ../input_files/activity_data/kcnq_compounds.csv -f ../input_files/fastas/KCNQ2.fasta -o ../boltz_inputs/KCNQ2 -n 4 --protein_nmers 4
 ```
-=======
-python setup_boltz_job.py --input_csv_file /path/to/input.csv --output_directory /path/to/output_directory --name receptor_name
-```
-
-For a virtual screen on 4 GPUs:
-```bash
-python setup_boltz_job.py --input_csv_file /path/to/input.csv --output_directory /path/to/output_directory --num_jobs 4 --name receptor_name
-```
-
-For covalent docking:
-```bash
-python setup_boltz_job.py --input_csv_file --output_directory /path/to/output_directory --covalent_docking --name receptor_name
-```
-Note for covalent docking the input will be a csv with 
->>>>>>> origin:modules/triage_boltz/README.md
 
 #### Input CSV Requirements
 
 The input CSV file must contain the following columns:
-<<<<<<< HEAD:scripts/README.md
-- `compound_id`: Unique identifier for the compound.
-- `SMILES`: SMILES string representing the compound structure.
-
-#### Output
-- `.a3m` MSA files are pregenerated using the mmseqs2 server, you do not need to have --use-msa-server flag in boltz
-- `.yaml` files are created in the specified output directory, one for each compound in the CSV file.
-- The protein sequence is extracted from the PDB file and included in the `.yaml` files.
-
----
-## SLURM job scripts 
-### slurm_run_boltz.sh
-
-The script will automatically generate SLURM batch scripts for running Boltz jobs on a high-performance computing cluster with the pathing and inputs for boltz already set 
-to the generated input directories. By default these scripts will be generated in {Project_dir}/slurm_scripts
-
-#### Example Usage
-=======
 - `compound_ID`: Unique identifier for the compound. the first compound_ID is what will be the binder.
 - `SMILES`: SMILES string representing the compound structure.
 - `protein_ID`, `dna_ID`, `rna_ID`: Optional columns for specifying proteins, DNA, or RNA.
@@ -104,14 +62,6 @@ Row 2: Includes ZINC0002 (compound 1), cholesterol (compound 2), test_receptor (
 
 This format allows you to specify multiple compounds and proteins to be docked to complex systems in a single CSV file. The script will also generate the .yaml inputs in convient number parallel batch directories with associated slurm submit scripts with the use of the --num_jobs flag if you so desire. As of right now, the affinity will be only computed for the first compound i.e compound_ID_1 given, though by default confidence model scores will be generated for all biomolecules
 
-if you wish to do covalent docking, you must pass a csv file with the protein_ID and pdb_path columns like so:
-```csv
-protein_ID,pdb_path
-aa2a,/some/path
-a2ba,/some/path
-2web,/some/path
-```
-
 #### Features
 
 - **CSV Parsing**: Reads input CSV files to create `TriageBiomolecule` objects for ligands, proteins, DNA, and RNA.
@@ -127,23 +77,16 @@ For non-covalent docking:
 - `.a3m` MSA files are pregenerated using the mmseqs2 server.
 - `.yaml` files are created in the specified output directory, one for each compound in the CSV file.
 
-For covalent docking:
-- `.yaml` files are created in the specified output directory.
-- The protein sequence is extracted from the PDB file and included in the `.yaml` files.
-- Covalent bond information is automatically extracted and included in the `.yaml` files.
-
 #### SLURM Scripts
 
 The script automatically generates SLURM batch scripts for running Boltz jobs on a high-performance computing cluster. These scripts are saved in `{PROJECT_DIR}/slurm_scripts`.
 
 #### Example SLURM Script Usage
->>>>>>> origin:modules/triage_boltz/README.md
 
 ```bash
 sbatch slurm_run_boltz.sh
 ```
 
-<<<<<<< HEAD:scripts/README.md
 ---
 
 ## Future Features: aka work in progress
@@ -151,16 +94,6 @@ sbatch slurm_run_boltz.sh
 - generate_boltz_constrains: a method to automatically generate constraints to condition diffusion towards specific protein active states based on two input pdbs.
 
 
-=======
-#### Notes
-
-- Ensure the `PROJECT_DIR` environment variable is set before running the script.
-- Input CSV files must follow the expected format, with columns for `compound_ID`, `protein_ID`, `dna_ID`, `rna_ID`, and their associated properties.
-- For covalent docking, only PDB files are required, and the `--use-msa-server` flag must be used when running Boltz.
-
----
-
->>>>>>> origin:modules/triage_boltz/README.md
 # Analyze Boltz Predictions
 
 This script processes Boltz predictions, computes metrics, and optionally performs bootstrapping for further analysis. The results are saved as CSV and JSON files for easy access.
@@ -286,19 +219,8 @@ By default, if a parent is specified, it will be the first model in the written 
 #### Example Usage
 
 ```bash
-<<<<<<< HEAD:scripts/README.md
 python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb```
-=======
-python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb
-```
->>>>>>> origin:modules/triage_boltz/README.md
-
 
 
 ### Contact
-
-<<<<<<< HEAD:scripts/README.md
 For issues or questions, please contact limcaoco@umich.edu
-=======
-For issues or questions, please contact limcaoco@umich.edu
->>>>>>> origin:modules/triage_boltz/README.md
