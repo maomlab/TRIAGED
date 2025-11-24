@@ -141,24 +141,24 @@ def read_boltz_predictions(predictions_dir, reps=False):
                         "Complex iPDE": complex_ipde})
     return pd.DataFrame(data)
 
-def process_invitro(invitro_df, score_col, threshold=1000):
+def process_invitro(invitro_df, exp_col, threshold=1000):
     '''
     Cleans up in-vitro csv data, converts affinity values from nM to uM, and returns DataFrames with labeled actives and inactives.
     :param invitro_df: Pandas DataFrame
         Experimental in vitro affinity measured for a set of ligands. 
-    :param score_col (str): Name of the column with in vitro affinity or IC50 values. 
+    :param exp_col (str): Name of the column with in vitro affinity or IC50 values. 
     :threshold (int): Threshold in nM to label actives vs inactives. Default = 1000nM 
     :return: Pandas DataFrame
         Active and inactive ligands labelled based on the threshold.
     '''
-    num_nans = invitro_df[score_col].isna().sum()
-    print(f"Number of NaN values in '{score_col}': {num_nans}")
+    num_nans = invitro_df[exp_col].isna().sum()
+    print(f"Number of NaN values in '{exp_col}': {num_nans}")
     
-    invitro_df["is_binder"] = invitro_df[score_col].apply(lambda x: True if x < int(threshold) else False)
+    invitro_df["is_binder"] = invitro_df[exp_col].apply(lambda x: True if x < int(threshold) else False)
 
-    invitro_df["log10(IC50)"] = invitro_df[score_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM -> uM and log10(uM)
-    invitro_df["pIC50"] = invitro_df[score_col].apply(lambda x: -math.log10(x * 1e-9)) # nM -> -log10(M)
-    invitro_df.drop(score_col, axis=1, inplace=True)
+    invitro_df[f"log{exp_col}"] = invitro_df[exp_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM -> uM and log10(uM)
+    invitro_df["pIC50"] = invitro_df[exp_col].apply(lambda x: -math.log10(x * 1e-9)) # nM -> -log10(M)
+    invitro_df.drop(exp_col, axis=1, inplace=True)
     # remove nans 
     invitro_df.replace(["nan", "NaN"], np.nan, inplace=True) 
 

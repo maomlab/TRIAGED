@@ -21,7 +21,7 @@ def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, topN, exp_col="IC
 
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
-    df_invitro_labeled = process_invitro(invitro_df=df_invitro, score_col=exp_col) 
+    df_invitro_labeled = process_invitro(invitro_df=df_invitro, exp_col=exp_col) 
 
     positive_df = df_invitro_labeled[df_invitro_labeled['is_binder'] == True]
     negative_df = df_invitro_labeled[df_invitro_labeled['is_binder'] == False]
@@ -51,7 +51,7 @@ def analyze_boltz_preds(invitro_file, boltz_outdir, score_col, topN, exp_col="IC
     analysis_dict['metrics_curves'] = [metrics, curves]
 
     if plot: 
-        plot = affinity_scatter(df_truth_pred=df_truth_pred, run_name=run_name, score_col=score_col)
+        plot = affinity_scatter(df_truth_pred=df_truth_pred, run_name=run_name, score_col=score_col, exp_col=expl_col)
         more_figs = plot_curves(run_name=run_name, curves=curves, metrics=metrics)
         analysis_dict['plots'] = [plot, more_figs] # dicts within lists 
 
@@ -72,11 +72,10 @@ def mean_metrics(boltz_reps_outdir, score_col):
     return all_pred_reps, stats 
 
 
-def analyze_mean_preds(invitro_file, stats_df, score_col, topN, run_name=None, plot=False):
-    
+def analyze_mean_preds(invitro_file, stats_df, score_col, topN, run_name=None, plot=False, exp_col="IC50"):
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
-    df_invitro_labeled = process_invitro(invitro_df=df_invitro, score_col="IC50 (nM)") 
+    df_invitro_labeled = process_invitro(invitro_df=df_invitro, exp_col=exp_col) 
 
     positive_df = df_invitro_labeled[df_invitro_labeled['is_binder'] == True]
     negative_df = df_invitro_labeled[df_invitro_labeled['is_binder'] == False]
