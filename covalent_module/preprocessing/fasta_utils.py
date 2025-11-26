@@ -43,7 +43,7 @@ def build_sequence_for_chain(pdb_file, chain_id):
 
     return sequence 
 
-def read_csv_pdbs(csv_path='/home/ymanasa/turbo/ymanasa/opt/boltz/covalent_testing/cov_indb2.csv'):
+def read_csv_pdbs(csv_path):
     """
     Reads a CSV file and returns a list of PDB IDs from the 'PDB' column.
     """

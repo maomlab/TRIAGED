@@ -2,8 +2,8 @@
 #SBATCH --job-name=test_env_tgcpl
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=6:00:00
-#SBATCH --account=tromeara99
+#SBATCH --time=00:01:00
+#SBATCH --account=xxxx
 #SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
@@ -13,8 +13,6 @@
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
-
-source /nfs/turbo/umms-maom/ymanasa/miniconda3/etc/profile.d/conda.sh
 conda activate boltz2
 module load cuda cudnn
 

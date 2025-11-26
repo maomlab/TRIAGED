@@ -9,7 +9,7 @@ from covalent_module.preprocessing import covalent_utils
 from covalent_module.preprocessing import make_input_csv
 
 from dotenv import load_dotenv
-load_dotenv("/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/.env")
+load_dotenv("TRIAGED/covalent_module/.env")
 
 # load common env variables and checks if the values exist
 expected_vars = ["BOLTZ_CACHE", "CCD_DB"]
@@ -92,7 +92,7 @@ def run(pdb_file,res_idx,chain_id,smiles,compound_id,outdir, msa=None):
     with open(boltz_job, "w") as boltz:
         boltz.write("#!/bin/bash\n")
         # if slurm not None, slurm args are added later over here 
-        boltz.write("source  /nfs/turbo/umms-maom/ymanasa/miniconda3/etc/profile.d/conda.sh\n")       
+        boltz.write("source  ${HOME}/opt/miniconda3/etc/profile.d/conda.sh\n")       
         boltz.write("conda activate boltz2\n")
         boltz.write("module load cuda cudnn\n")
         boltz.write("\n")
