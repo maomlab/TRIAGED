@@ -220,7 +220,9 @@ By default, if a parent is specified, it will be the first model in the written 
 
 ```bash
 python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb```
-
+=======
+python compile_individual_mol_structures.py -p 3JQZ.pdb -d boltz_jobs/mol1/boltz_results_mol1/predictions/mol1 -o 3JQZ_top_models.pdb
+```
 
 ### Contact
 For issues or questions, please contact limcaoco@umich.edu
