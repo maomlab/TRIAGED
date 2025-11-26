@@ -7,7 +7,7 @@ from covalent_module.preprocessing import make_input_csv
 from covalent_module.preprocessing import setup_cov_yamls
 from dotenv import load_dotenv
 
-load_dotenv("/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/.env")
+load_dotenv("TRIAGED/covalent_module/.env")
 # load common env variables and checks if the values exist
 expected_vars = ["BOLTZ_CACHE", "LIGAND_CSV", "SLURM_TEMPLATE"]
 missing_vars = [var for var in expected_vars if var not in os.environ]
