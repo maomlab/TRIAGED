@@ -1,0 +1,3 @@
+/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/5MAJ/5MAJ/5MAJ_VM834/5MAJ_VM834.yaml /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/5MAJ/5MAJ/5MAJ_VM834
+/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/5MAJ/5MAJ/5MAJ_FGDY1/5MAJ_FGDY1.yaml /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/5MAJ/5MAJ/5MAJ_FGDY1
+/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/5MAJ/5MAJ/5MAJ_DJ5KX/5MAJ_DJ5KX.yaml /home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/tutorial/5MAJ/5MAJ/5MAJ_DJ5KX
