@@ -155,14 +155,12 @@ def process_invitro(invitro_df, exp_col, threshold=1000):
     print(f"Number of NaN values in '{exp_col}': {num_nans}")
     
     invitro_df["is_binder"] = invitro_df[exp_col].apply(lambda x: True if x < int(threshold) else False)
-
-    invitro_df[f"log{exp_col}"] = invitro_df[exp_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM -> uM and log10(uM)
+    invitro_df[f"log_{exp_col}"] = invitro_df[exp_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM -> uM and log10(uM)
     invitro_df["pIC50"] = invitro_df[exp_col].apply(lambda x: -math.log10(x * 1e-9)) # nM -> -log10(M)
-    invitro_df.drop(exp_col, axis=1, inplace=True)
     # remove nans 
     invitro_df.replace(["nan", "NaN"], np.nan, inplace=True) 
-
-    return pd.DataFrame(invitro_df.dropna())
+    
+    return invitro_df
 
 def enrichment_factor(df_truth_pred, score_col, topN):
     '''

@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=test_env_tgcpl
+#SBATCH --job-name=latest_nopred_tgcpl
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=00:01:00
-#SBATCH --account=xxxx
+#SBATCH --time=01:00:00
+#SBATCH --account=tromeara99
 #SBATCH --partition=gpu
 #SBATCH --gpus-per-node=1
 #SBATCH --cpus-per-task=8
@@ -13,11 +13,12 @@
 #SBATCH --output=/dev/null
 #SBATCH --error=/dev/null
 
+source /nfs/turbo/umms-maom/ymanasa/miniconda3/etc/profile.d/conda.sh
 conda activate boltz2
 module load cuda cudnn
 
 JOB_FILE="$1"
-LINES_PER_TASK=10   # number of YAMLs per array task
+LINES_PER_TASK=9   # number of YAMLs per array task
 
 # Calculate starting line for this array task
 START=$(( SLURM_ARRAY_TASK_ID * LINES_PER_TASK + 1 ))
@@ -30,8 +31,8 @@ sed -n "${START},${END}p" "$JOB_FILE" | while read -r YAML_PATH RECEPTOR_LIG_DIR
     boltz predict "${YAML_PATH}" \
         --out_dir "${RECEPTOR_LIG_DIR}" \
         --num_workers 8 \
-        --sampling_steps 500 \
-        --sampling_steps_affinity 500 \
+        --sampling_steps 200 \
+        --sampling_steps_affinity 200 \
         1> "${RECEPTOR_LIG_DIR}/slurm_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.out" \
         2> "${RECEPTOR_LIG_DIR}/slurm_${SLURM_ARRAY_JOB_ID}_${SLURM_ARRAY_TASK_ID}.err"
 done

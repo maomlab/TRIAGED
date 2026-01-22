@@ -11,7 +11,7 @@ WARHEAD_REACTIONS = { "nitrile": "[C:3][C:4]#[N:5]>>[C:3][13C:4]=[N:5]",
 "alkylhalide" : "[CX4;CH,CH2:2][I,Br,Cl:3]>>[13C:2]",
 "vinyl-sulfone" : "[C:3]=[C:4][S:5](=O)=O>>[13C:3][C:4][S:5](=O)=O", # for CYS rxn; might be diff for HIS (Schneider, Grabowsky 2015)
 "acrylamide" : "[C:2]=[C:3]-C(=O)-[N:4]>>[13C:3]-[C:2]-C(=O)-[N:4]",
-"nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]"
+"nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]",
 }
 WARHEAD_REACTANTS = {name: smarts.split(">>")[0] for name, smarts in WARHEAD_REACTIONS.items()}
 compiled_reactants = {name: Chem.MolFromSmarts(smarts) for name, smarts in WARHEAD_REACTANTS.items()}
@@ -69,9 +69,12 @@ def identify_warhead(smiles):
 
     if len(found_warheads) > 1:
         if VERBOSE: print("[WARNING] More than 1 warhead found. Choosing first match.")
+        return found_warheads[0]
+    elif len(found_warheads) == 1:
+        return found_warheads[0]
     elif len(found_warheads) == 0:
-        raise ValueError(f'[ERROR] No matching warhead was found for {smiles}')
-    return found_warheads[0]
+        if VERBOSE: print(f'[WARNING] No matching warhead was found for {smiles}')
+        return None
 
 def ligand_cov_atom(no_lg_smiles):
     '''
@@ -113,20 +116,23 @@ def remove_leaving_group(smiles):
     mol = Chem.MolFromSmiles(smiles)
     wh_type = identify_warhead(smiles)
 
-    rxn = AllChem.ReactionFromSmarts(WARHEAD_REACTIONS[wh_type])
+    if wh_type is not None:
+        rxn = AllChem.ReactionFromSmarts(WARHEAD_REACTIONS[wh_type])
 
-    products = rxn.RunReactants((mol,))
+        products = rxn.RunReactants((mol,))
 
-    for prod_tuple in products: # returns ((<rdkit.Chem.rdchem.Mol object at 0x14d267c24040>,),) 
-        for prod in prod_tuple:
-            smi_no_lg = Chem.MolToSmiles(prod)
+        for prod_tuple in products: # returns ((<rdkit.Chem.rdchem.Mol object at 0x14d267c24040>,),) 
+            for prod in prod_tuple:
+                smi_no_lg = Chem.MolToSmiles(prod)
 
-    lig_atom = ligand_cov_atom(smi_no_lg)
-    smi_no_c13 = smi_no_lg.replace("13", "")
+        lig_atom = ligand_cov_atom(smi_no_lg)
+        smi_no_c13 = smi_no_lg.replace("13", "")
 
-    if VERBOSE: print('[SUCCESS] Leaving group removed:', smi_no_c13)
+        if VERBOSE: print('[SUCCESS] Leaving group removed:', smi_no_c13)
 
-    return smi_no_c13, lig_atom, wh_type
+        return smi_no_c13, lig_atom, wh_type
+    else:
+        return None, None, None
 
 def compute_3d(mol) -> bool:
     '''Generate 3D coordinates using EKTDG method.

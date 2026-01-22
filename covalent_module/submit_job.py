@@ -7,7 +7,7 @@ from covalent_module.preprocessing import make_input_csv
 from covalent_module.preprocessing import setup_cov_yamls
 from dotenv import load_dotenv
 
-load_dotenv("TRIAGED/covalent_module/.env")
+load_dotenv("/home/ymanasa/turbo/ymanasa/opt/maom_boltz/covalent_module/.env")
 # load common env variables and checks if the values exist
 expected_vars = ["BOLTZ_CACHE", "LIGAND_CSV", "SLURM_TEMPLATE"]
 missing_vars = [var for var in expected_vars if var not in os.environ]
@@ -54,15 +54,21 @@ def run(name, prot_file, res_idx, lig_chain, outdir, msa_path):
 
             os.makedirs(pred_lig_dir, exist_ok=True)
             dest = os.path.join(pred_lig_dir, os.path.basename(yaml))
-            if os.path.exists(dest):
+            prediction = os.path.join(pred_lig_dir, f"boltz_results_{receptor_lig}/predictions/{receptor_lig}/{receptor_lig}_model_0.cif")
+            
+            if os.path.exists(dest) and os.path.exists(prediction):
+                if VERBOSE: print(f"[WARNING] {prediction} exists. Skipping {receptor_lig}.")
+            elif os.path.exists(dest) and not os.path.exists(prediction):
                 if VERBOSE: print(f"[WARNING] {os.path.basename(yaml)} exists. Deleting and rewriting.")
-                os.remove(dest)  
+                os.remove(dest)
+            # moves yaml regardless of prediction/yaml existing
             shutil.move(yaml, pred_lig_dir)
 
             yaml_path = os.path.join(pred_lig_dir, os.path.basename(yaml))
 
-            with open(job_list_file, 'a') as f: 
-                f.write(f"{yaml_path} {pred_lig_dir}\n")
+            if not os.path.exists(prediction): # only write to job list if cif prediction was not found
+                with open(job_list_file, 'a') as f: 
+                    f.write(f"{yaml_path} {pred_lig_dir}\n")
 
         slurm_script = os.path.join(outdir, os.path.basename(SLURM_TEMPLATE))
         # submit jobs
@@ -87,16 +93,73 @@ def run(name, prot_file, res_idx, lig_chain, outdir, msa_path):
             )
         
         if VERBOSE: print(f"Submitting SLURM jobs...")
-    
+
+def check_pred(compound_rec_df, output):
+
+    # Normalize empties (important if empty strings exist)
+    compound_rec_df[["tgcpl_pred_log_ic50", "hscpl_pred_log_ic50"]] = (
+        compound_rec_df[["tgcpl_pred_log_ic50", "hscpl_pred_log_ic50"]]
+        .replace("", pd.NA)
+    )
+
+    # Select columns to keep
+    cols = ["vault_id", "compound_id", "smiles"]
+
+    # Rows with missing predictions in either column
+    missing_pred = compound_rec_df[
+        compound_rec_df["tgcpl_pred_log_ic50"].isna() |
+        compound_rec_df["hscpl_pred_log_ic50"].isna()
+    ][cols]
+
+    missing_pred.rename(columns={'smiles':'SMILES'}, inplace=True)
+    # Write single CSV
+    missing_pred.to_csv(output, index=False)
+
+    print(f"Total compounds with missing predictions: {len(missing_pred)}")
+
+
+def update_env_key(key, value, env_file='/nfs/turbo/umms-maom/ymanasa/opt/maom_boltz/covalent_module/.env'):
+    lines = []
+    found = False
+
+    # Read existing file (if it exists)
+    try:
+        with open(env_file, "r") as f:
+            lines = f.readlines()
+    except FileNotFoundError:
+        pass
+
+    # Update or keep lines
+    with open(env_file, "w") as f:
+        for line in lines:
+            if line.strip().startswith(f"export {key}="):
+                f.write(f"export {key}={value}\n")
+                found = True
+            else:
+                f.write(line)
+
+        # Add key if it wasn't found
+        if not found:
+            f.write(f"{key}={value}\n")
+
 def main(args):
-    run(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_chain=args.lig_chain, outdir=args.outdir, msa_path=args.msa_path)
+    compound_rec = pd.read_csv(args.compound_rec)
+    
+    check_pred(compound_rec_df=compound_rec, output='records/latest_nopred_ligs.csv')
+
+    update_env_key(key='LIGAND_CSV', value=args.ligand_csv)
+    update_env_key(key='COMPOUND_RECORD', value=args.compound_rec)
+
+    run(name=args.name, prot_file=args.prot_file, res_idx=args.res_idx, lig_chain=args.ligand_chain, outdir=args.outdir, msa_path=args.msa_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="One main run script for covalent docking. Generates input CSV, builds yamls, and submits SLURM jobs. Please use ccd_pkl conda env.")
     parser.add_argument("-n", "--name", type=str, required=True, help="Name of protein. Used for naming output files.")
     parser.add_argument("--prot_file", type=str, required=True, help="Path to either a PDB file or a TXT file with a single chain sequence.")
     parser.add_argument("--res_idx", type=int, required=True, help="Index of the residue to be covalently targeted by a covalent ligand. Starting at 1.")
-    parser.add_argument("--lig_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
+    parser.add_argument("--ligand_chain", type=str, required=True, help="Chain interacting with ligand in PDB file. Single character.")
+    parser.add_argument("--ligand_csv", type=str, required=True, help="Path to output CSV with SMILES and compound_id columns to be made.")
+    parser.add_argument("--compound_rec", type=str, required=True, help="Path to compound record of existing predictions csv.")
     parser.add_argument("--msa_path", type=str, required=False, help="Path to MSA file in csv format. If provided, will be added to yaml.", default=None)
     parser.add_argument("-o","--outdir", type=str, required=True, help="Output directory for all jobs.")
 

@@ -72,7 +72,7 @@ def mean_metrics(boltz_reps_outdir, score_col):
     return all_pred_reps, stats 
 
 
-def analyze_mean_preds(invitro_file, stats_df, score_col, topN, run_name=None, plot=False, exp_col="IC50"):
+def analyze_mean_preds(invitro_file, stats_df, score_col, exp_col, topN, run_name=None, plot=False):
     df_invitro = pd.read_csv(invitro_file)
     # convert IC50 measured and label actives/inactives
     df_invitro_labeled = process_invitro(invitro_df=df_invitro, exp_col=exp_col) 
@@ -100,7 +100,7 @@ def analyze_mean_preds(invitro_file, stats_df, score_col, topN, run_name=None, p
     }
 
     if plot: 
-        exp_col = "log10(IC50)"
+        exp_col = f'log_{exp_col}'
         scatter = affinity_scatter(df_truth_pred=df_truth_pred, run_name=run_name, score_col=score_col, exp_col=exp_col)
         curve_figs = plot_curves(run_name=run_name, curves=curves, metrics=metrics)
         analysis_dict['plots'] = {
@@ -140,7 +140,7 @@ def view_plot(fig, save_path=None, show=True, close=False, run_name=None):
     if close:
         plt.close(fig)
 
-def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, write_output=None, run_name=None):
+def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, exp_col, write_output=None, run_name=None):
     '''
     Plots topN ligands predicted by boltz vs topN experimentally ranked. 
     Uses truth_pred_df, analysis_dict output from analyze_mean_preds only!
@@ -158,27 +158,27 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, write_o
     if score_col == "Pred log10(IC50)":
         # most negative val needs to be top/best for log(ic50)
         df_sorted_pred = truth_pred_df.sort_values(by=score_col, ascending=True) 
-        df_sorted_truth = truth_pred_df.sort_values(by="log10(IC50)", ascending=True)
+        df_sorted_truth = truth_pred_df.sort_values(by=f"log_{exp_col}", ascending=True)
     else:
         df_sorted_pred = truth_pred_df.sort_values(by=score_col, ascending=False) 
-        df_sorted_truth = truth_pred_df.sort_values(by="log10(IC50)", ascending=True) # always using log10(IC50) from experiments
+        df_sorted_truth = truth_pred_df.sort_values(by=f"log_{exp_col}", ascending=True) 
 
     # predicted topN by boltz
     topN_pred = df_sorted_pred.head(int(topN * len(df_sorted_pred)))
     topN_x_pred = topN_pred[['compound_id', score_col]]
-    topN_y_pred =  topN_pred[['compound_id', "log10(IC50)"]]
+    topN_y_pred =  topN_pred[['compound_id', f"log_{exp_col}"]]
 
     # experimental topN
     topN_truth = df_sorted_truth.head(int(topN * len(df_sorted_truth)))
     topN_x_truth= topN_truth[['compound_id', score_col]]
-    topN_y_truth=  topN_truth[['compound_id', "log10(IC50)"]]
+    topN_y_truth=  topN_truth[['compound_id', f"log_{exp_col}"]]
 
     # find common ligands in topN of both predicted and true values
-    df_truth_pred = pd.merge(topN_truth[['compound_id', "log10(IC50)"]], topN_pred[['compound_id', score_col]], on="compound_id")
+    df_truth_pred = pd.merge(topN_truth[['compound_id', f"log_{exp_col}"]], topN_pred[['compound_id', score_col]], on="compound_id")
 
     if write_output: 
         df_truth_pred2 = pd.merge(
-        topN_truth[['compound_id', "log10(IC50)"]],
+        topN_truth[['compound_id', f"log_{exp_col}"]],
         topN_pred[['compound_id', score_col]],
         on="compound_id",
         how="outer",       # use outer to include all from both
@@ -194,7 +194,7 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, write_o
     # overlap compounds in topN
     ax.scatter(
     df_truth_pred[score_col],
-    df_truth_pred['log10(IC50)'],
+    df_truth_pred[f'log_{exp_col}'],
     color='purple',
     label=f'top{topN*100}% overlap',
     alpha=0.7
@@ -211,7 +211,7 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, write_o
     # plot on existing fig,ax
     ax.scatter(
     topN_x_truth_filtered[score_col],
-    topN_y_truth_filtered['log10(IC50)'],
+    topN_y_truth_filtered[f'log_{exp_col}'],
     color='red',
     label=f'top{topN*100}% truth',
     alpha=0.7
@@ -226,7 +226,7 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, write_o
 
     ax.scatter(
     topN_x_pred_filtered[score_col],
-    topN_y_pred_filtered['log10(IC50)'],
+    topN_y_pred_filtered[f'log_{exp_col}'],
     color='blue',
     label=f'top{topN*100}% pred',
     alpha=0.7

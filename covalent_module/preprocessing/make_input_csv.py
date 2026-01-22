@@ -58,6 +58,7 @@ def generate_csv(name, prot_file, res_idx, lig_chain, out_csv, ccd_db):
     with open(LIG_CSV, 'r') as lig:
         reader = csv.reader(lig)
         header = next(reader)  
+        header = [h.replace("\ufeff", "").strip() for h in header]
         name_idx = header.index('vault_id')
         smiles_idx = header.index('SMILES')
         
@@ -113,11 +114,14 @@ def generate_csv(name, prot_file, res_idx, lig_chain, out_csv, ccd_db):
                 # no need to update the record 
                 compound_id = compound_id
 
-            smiles_no_lg, lig_atom, wh_type = remove_leaving_group(lig[1])
+            smiles_no_lg, lig_atom, wh_found = remove_leaving_group(lig[1])
+            if wh_found is None: 
+                print('skipping ligand', lig[0])
+                continue 
 
             # makes pkl file if dne
             process_covalent_smiles(ccd_db, smiles_no_lg, compound_id) 
-            writer.writerow([smiles_no_lg, compound_id, vault_id, wh_type, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
+            writer.writerow([smiles_no_lg, compound_id, vault_id, wh_found, lig_atom, str(name), seq, int(res_idx), res_name, res_atom])
 
     # need to update records 
     compound_rec_copy.to_csv(COMPOUND_RECORD, index=False)  
