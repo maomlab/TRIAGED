@@ -204,3 +204,6 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+
+# ymanasa/covalent_module
+covalent_module/test_.ipynb
