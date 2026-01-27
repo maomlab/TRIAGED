@@ -47,7 +47,6 @@ def read_json_args(json_file):
     VERBOSE, output_dir
     )
 
-
 def main(args):
     '''
     Takes in JSON with all required variables.

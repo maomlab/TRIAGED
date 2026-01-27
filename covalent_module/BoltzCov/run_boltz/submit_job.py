@@ -44,7 +44,6 @@ def run_boltz_cov(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERB
             with open(job_list_file, 'a') as f: 
                 f.write(f"{yaml_path} {pred_lig_dir}\n")
     
-
     slurm_script = os.path.join(boltz_cache_prot, os.path.basename(slurm_template))
     # submit jobs
     subprocess.run(
