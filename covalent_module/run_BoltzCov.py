@@ -4,7 +4,8 @@ import sys
 import json 
 import time 
 import argparse
-from BoltzCov.update_ligands import pull_cdd_ligs
+from BoltzCov.update_ligands import pull_cdd_ligs, update_predictions
+from BoltzCov.run_boltz import submit_job
 
 def read_json_args(json_file):
     '''
@@ -16,8 +17,8 @@ def read_json_args(json_file):
     with open(json_file, 'r') as jf:
         run_arguments = json.load(jf)
 
-        record_path = run_arguments.get("RECORD_PATH") 
-        record_path = os.path.expandvars(record_path) if record_path else None  # can be None for first time run since ligands are pulled from cdd but path must be given 
+        record_path = run_arguments.get("RECORD_PATH") # can have csvs named: metadata.csv, experiment_readout.csv, predictions.csv
+        record_path = os.path.expandvars(record_path) if record_path else None  # can be None for first time run since ligands are pulled from cdd
 
         cdd_api_key = run_arguments.get("CDD_API_KEY", None)
         vault_id = run_arguments.get("VAULT_ID", None) # number of the vault in CDD 
@@ -30,8 +31,8 @@ def read_json_args(json_file):
         ligand_chain = run_arguments.get("LIGAND_CHAIN", None)
         msa_path = run_arguments.get("MSA_PATH")
         msa_path = os.path.expandvars(msa_path) if msa_path else None # dont need to provide this  
-        boltz_cache = run_arguments.get("BOLTZ_CACHE", None)
-        boltz_cache = os.path.expandvars(boltz_cache) if boltz_cache else None 
+        boltz_cache = run_arguments.get("BOLTZ_CACHE", None) 
+        boltz_cache = os.path.expandvars(boltz_cache) if boltz_cache else None # need this; just easier to have a single location to put temp stuff in and delete it completely after the run
         slurm_template = run_arguments.get("SLURM_TEMPLATE", None)
         slurm_template = os.path.expandvars(slurm_template) if slurm_template else None 
         
@@ -41,9 +42,9 @@ def read_json_args(json_file):
     
     return (
     record_path,
-    (cdd_api_key, vault_id, readout_query, mol_query),
-    (pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template),
-    (VERBOSE, output_dir)
+    cdd_api_key, vault_id, readout_query, mol_query,
+    pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template,
+    VERBOSE, output_dir
     )
 
 
@@ -65,29 +66,31 @@ def main(args):
     '''
     # loading input arguments from user 
     (record_path,
-    (cdd_api_key, vault_id, readout_query, mol_query, readout_id),
-    (pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template),
-    (VERBOSE, output_dir)
-    ) = read_json_args(args.json_file)
+    cdd_api_key, vault_id, readout_query, mol_query, readout_id,
+    pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template,
+    VERBOSE, output_dir) = read_json_args(args.json_file)
 
-    if any(x is None for x in (pdb, res_idx, ligand_chain, boltz_cache, slurm_template,
-    cdd_api_key, vault_id, readout_query, mol_query, readout_id, output_dir)):
+    if any(x is None for x in (pdb, res_idx, ligand_chain, slurm_template,
+    cdd_api_key, vault_id, readout_query, mol_query, boltz_cache, readout_id, output_dir)):
         raise ValueError("Please make sure all required arguments are given in the input JSON.")
 
     # pull ligand information and experiment readouts 
-    print("1. Pulling ligands from CDD vault using the following queries:" \
-        f"{readout_query}" \
-        f"{mol_query}")
+    print("1. Pulling ligands from CDD vault using the following queries:\n"
+      f"Readout query: {readout_query}\n"
+      f"Molecule query: {mol_query}")
             
     readouts, molecules = pull_cdd_ligs.cdd_query(API_KEY=cdd_api_key, 
-                                    VAULT_ID=7171, 
+                                    VAULT_ID=vault_id,  # Use vault_id variable
                                     readout_query=readout_query, 
                                     mol_query=mol_query)
     
     print("2. Updating compound records.")
+    old_meta = os.path.join(record_path, 'metadata.csv') 
+    old_exp = os.path.join(record_path, 'experiment_readouts.csv')
+
     new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(readouts, molecules)
     if record_path is None: 
-        if VERBOSE: print("Writing new records (metadata.csv, and experimental_readouts.csv) since None path provided by User.")
+        if VERBOSE: print("Writing new records (metadata.csv, and experimental_readouts.csv) in output directory since None path provided by User.")
         # make record dir in output if dir dne 
         record_dir = os.path.join(output_dir, 'records')
         os.makedirs(record_dir, exist_ok=True)
@@ -97,8 +100,6 @@ def main(args):
 
     if record_path: 
         os.makedirs(record_path, exist_ok=True)
-        old_meta = os.path.join(record_path, 'metadata.csv') 
-        old_exp = os.path.join(record_path, 'experiment_readouts.csv')
         if not os.path.exists(old_meta) or not os.path.exists(old_exp):
             if VERBOSE: print(f"metadata.csv or/and experiment_readouts.csv were not found in {record_path}. Writing new records.") # first time use or to skirt unintential overwriting 
             print("You have 5 seconds to terminate and cancel overwrite to possible exisiting records.")
@@ -107,7 +108,7 @@ def main(args):
             pd.DataFrame(new_metadata_df).to_csv(old_meta, index=False)
             if VERBOSE: print(f"Fresh metadata.csv and experiment_readouts.csv written in {record_path}.")
 
-        if os.path.exists(old_meta) and os.path.exists(old_exp):
+        elif os.path.exists(old_meta) and os.path.exists(old_exp):
             if VERBOSE: print(f"Updating the provided metadata.csv and experiment_readouts.csv in {record_path}")
             old_meta_df = pd.read_csv(old_meta)
             old_exp_df = pd.read_csv(old_exp)
@@ -118,11 +119,29 @@ def main(args):
             pd.DataFrame(updated_readouts).to_csv(old_exp, index=False)
     
     if VERBOSE: print("-SUCCESS- 2. Record files updated with CDD-Vault information.")
-
-    # CHECK IF PREDICTION CSV EXISTS BEFORE UPDATING IT 
+    
+    # obtain list of ligands that need to be docked 
+    protein_name = os.path.splittext(os.path.basename(pdb))[0]
     print("3. Checking exisiting predictions and performing Docking with Boltz-2 Covalent.")
-    
-    
+    pred_rec = os.path.join(record_path, 'predictions.csv')
+    if os.path.exists(pred_rec):
+        pred_df = pd.read_csv(pred_rec)
+        no_pred_prot = update_predictions.fetch_new(pred_df, updated_metadata, protein_name)
+
+        error_csv = os.path.join(record_path, 'errored.csv')
+        if os.path.exists(error_csv): # update list to disinclude errored ligands 
+            error_df = pd.read_csv(error_csv)
+            no_pred_prot = update_predictions.check_attempted(error_df, no_pred_prot) 
+        else: 
+            if VERBOSE: print("No errored compounds. Attempting to Dock all compounds.")
+
+    elif not os.path.exists(pred_rec):
+        # simply assume no prediction was ever made 
+        if VERBOSE: print("predictions.csv was not found. Attempting to Dock all compounds.")
+        dock_compounds = updated_metadata[['substance_id', 'inchi_key', 'smiles']]
+
+        # call submit job  
+        submit_job.run_boltz_cov(protein_name, prot_file, res_idx, lig_chain, outdir, msa_path, )
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

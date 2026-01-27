@@ -1,10 +1,7 @@
 import os
-import random
-import string
 import pickle
 import rdkit
 from rdkit import Chem
-from rdkit.Chem import AllChem
 from pdbeccdutils.core.component import ConformerType 
 
 WARHEAD_REACTIONS = { "nitrile": "[C:3][C:4]#[N:5]>>[C:3][13C:4]=[N:5]", 
@@ -56,7 +53,6 @@ def identify_warhead(smiles):
     :returns: list
         A list of warhead names found in the molecule.
     '''
-    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
     mol = Chem.MolFromSmiles(smiles)
     if not mol:
         print("[ERROR] Invalid SMILES string.")
@@ -68,12 +64,10 @@ def identify_warhead(smiles):
             found_warheads.append(name)
 
     if len(found_warheads) > 1:
-        if VERBOSE: print("[WARNING] More than 1 warhead found. Choosing first match.")
         return found_warheads[0]
     elif len(found_warheads) == 1:
         return found_warheads[0]
     elif len(found_warheads) == 0:
-        if VERBOSE: print(f'[WARNING] No matching warhead was found for {smiles}')
         return None
 
 def ligand_cov_atom(no_lg_smiles):
@@ -95,44 +89,6 @@ def ligand_cov_atom(no_lg_smiles):
         if atom.GetSymbol() == 'C' and atom.GetIsotope() == 13:
             return f'C{atom.GetIdx()}'
     return -1
-
-def remove_leaving_group(smiles):
-    '''
-    Apply a covalent warhead-specific reaction to remove the leaving group
-    from a ligand SMILES string.
-    :param smiles: str
-        Input ligand SMILES string.
-
-    :returns: tuple
-            smi_no_c13: str
-                Processed SMILES with leaving group removed and isotopic labels stripped.
-            lig_atom: int
-                Index/identifier of the covalent attachment atom.
-            wh_type: str
-                Identified warhead type. 
-    '''
-    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
-
-    mol = Chem.MolFromSmiles(smiles)
-    wh_type = identify_warhead(smiles)
-
-    if wh_type is not None:
-        rxn = AllChem.ReactionFromSmarts(WARHEAD_REACTIONS[wh_type])
-
-        products = rxn.RunReactants((mol,))
-
-        for prod_tuple in products: # returns ((<rdkit.Chem.rdchem.Mol object at 0x14d267c24040>,),) 
-            for prod in prod_tuple:
-                smi_no_lg = Chem.MolToSmiles(prod)
-
-        lig_atom = ligand_cov_atom(smi_no_lg)
-        smi_no_c13 = smi_no_lg.replace("13", "")
-
-        if VERBOSE: print('[SUCCESS] Leaving group removed:', smi_no_c13)
-
-        return smi_no_c13, lig_atom, wh_type
-    else:
-        return None, None, None
 
 def compute_3d(mol) -> bool:
     '''Generate 3D coordinates using EKTDG method.
@@ -199,14 +155,7 @@ def process_covalent_smiles(ccd_db, smiles, compound_id):
     :return: str
         Unique CCD code (or the vault_id) for the covalent ligand pkl file.
     '''
-    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
-    DEBUG = os.environ.get("DEBUG", "FALSE").upper() == "TRUE"
-
     pkl_file = os.path.join(ccd_db, f"{compound_id}.pkl")
-
-    if DEBUG and os.path.exists(pkl_file): 
-        if VERBOSE: print("[WARNING] {pkl_file} will be removed and will be re-written!")
-        os.remove(pkl_file)
         
     if not os.path.exists(pkl_file):
         mol_sdf = Chem.MolFromSmiles(smiles) 
@@ -221,24 +170,3 @@ def process_covalent_smiles(ccd_db, smiles, compound_id):
 
         with open(pkl_file, "wb") as f:
             pickle.dump(mol_sdf, f)
-    else:
-        if VERBOSE and not DEBUG: print(f"[WARNING] {pkl_file} exists. Will not remake.")
-
-def lookup_compound_id(vault_id, compound_record):
-    if 'vault_id' not in compound_record.columns or 'compound_id' not in compound_record.columns:
-        print('[ERROR] add vault_id and compound_id columns')
-        return None
-    match = compound_record.loc[compound_record['vault_id'] == vault_id, 'compound_id']
-    compound_id = match.iloc[0] if not match.empty else None
-    return compound_id
-
-def unique_ccd(ccd_db, len=5, max_attempts=30):
-    '''Generates a unique alphanumeric string of specified length and ensures uniqueness.'''
-
-    chars = string.ascii_uppercase + string.digits
-
-    for _ in range(max_attempts):
-        ccd = ''.join(random.choices(chars, k=len))
-        if not os.path.exists(f"{ccd_db}/{ccd}.pkl"):
-            return ccd
-    raise RuntimeError("[ERROR] Could not find a unique CCD ID after max attempts.")
