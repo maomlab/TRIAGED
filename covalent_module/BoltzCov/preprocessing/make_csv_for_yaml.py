@@ -16,14 +16,14 @@ def validate_file(filename):
     else:
         return ext
 
-def process_protein(pdb, idx, lig_chain):
+def process_protein(prot_file, idx, lig_chain):
     '''Returns protein information.'''
     VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
-    ext = validate_file(pdb)
+    ext = validate_file(prot_file)
     if ext==".pdb":
-        sequence = pdb_to_fasta.build_sequence(pdb, lig_chain)
+        sequence = pdb_to_fasta.build_sequence(prot_file, lig_chain)
     else: # txt with sequence
-        with open(pdb, 'r') as f:
+        with open(prot_file, 'r') as f:
             content = f.read()
             sequence = "".join(content.split())
     if idx < 1:
@@ -57,11 +57,11 @@ def unique_ccd(ccd_db, len=5, max_attempts=1000):
     raise RuntimeError("[ERROR] Could not find a unique CCD ID after max attempts.")
 
 def lookup_compound_id(substance_id, compound_record):
-    match = compound_record.loc[compound_record['substance_id'] == substance_id, 'five_char_id']
-    five_char_id = match.iloc[0] if not match.empty else None
-    return five_char_id
+    match = compound_record.loc[compound_record['substance_id'] == substance_id, 'pkl_id']
+    pkl_id = match.iloc[0] if not match.empty else None
+    return pkl_id
 
-def generate_csv(pdb, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
+def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
     '''
     1. Process protein to get sequence, covalent residue name and atom.
     2. Ligand processing: 
@@ -70,7 +70,7 @@ def generate_csv(pdb, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
     3. Make CSV to make yamls for docking.
     '''
     if VERBOSE: print("- Processing protein right now.")
-    seq, res_name, res_atom = process_protein(pdb, res_idx, ligand_chain)
+    seq, res_name, res_atom = process_protein(prot_file, res_idx, ligand_chain)
 
     # writing csv for yaml 
     if VERBOSE: print("- Writing CSV to make yamls for docking.")
@@ -78,12 +78,8 @@ def generate_csv(pdb, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
     
     tmp_csv = os.path.join(boltz_cache, f'ligands_{today}.csv') 
 
-    if os.path.exists(tmp_csv):
-        if VERBOSE:  print(f"[WARNING] Output CSV '{tmp_csv}' already exists. Deleting and rewriting.")
-        os.remove(tmp_csv)
-
     # write header once
-    expected_header = ["smiles", "substance_id", "five_char_id" ,"WH_Type", "Lig_Atom", "Prot_ID", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
+    expected_header = ["smiles", "substance_id", "pkl_id" ,"WH_Type", "Lig_Atom", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
     write_header = True
     with open(tmp_csv, "r") as existing:
         reader = csv.reader(existing)
@@ -96,8 +92,8 @@ def generate_csv(pdb, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
     ligands = [(row['substance_id'], row['smiles']) for _, row in ligand_df.iterrows()]
 
     # setup to assign 5-char codes 
-    compound_rec_df = pd.DataFrame(columns=['substance_id', 'five_char_id'])
-    new_rows_list = [{'substance_id': name, 'five_char_id': 'XXXXXXX'} for name, _ in ligands]
+    compound_rec_df = pd.DataFrame(columns=['substance_id', 'pkl_id'])
+    new_rows_list = [{'substance_id': name, 'pkl_id': 'XXXXXXX'} for name, _ in ligands]
     compound_rec_copy = pd.concat([compound_rec_df, pd.DataFrame(new_rows_list)], ignore_index=True)
 
     boltz_cache_pkls = os.path.join(boltz_cache, 'cache_pkls')
@@ -110,17 +106,17 @@ def generate_csv(pdb, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
         # for each ligand, append the protein information, assuming one protein target 
         for lig in ligands:
             substance_id = lig[0]
-            five_char_id = lookup_compound_id(substance_id, compound_rec_copy) 
-            if five_char_id is None or len(five_char_id) > 5: 
-                # get unique 5 char five_char_id
-                five_char_id = unique_ccd(ccd_db=boltz_cache_pkls, len=5)
-                compound_rec_copy.loc[len(compound_rec_copy)] = {"substance_id": substance_id, "five_char_id": five_char_id}
-            elif len(substance_id) <= 5 and five_char_id is None: # case where substance_id is valid 
-                five_char_id = substance_id
-                compound_rec_copy.loc[len(compound_rec_copy)] = {"substance_id": substance_id, "five_char_id": five_char_id}
-            elif five_char_id is not None and len(five_char_id) <= 5: # case where five_char_id is valid
+            pkl_id = lookup_compound_id(substance_id, compound_rec_copy) 
+            if pkl_id is None or len(pkl_id) > 5: 
+                # get unique 5 char pkl_id
+                pkl_id = unique_ccd(ccd_db=boltz_cache_pkls, len=5)
+                compound_rec_copy.loc[len(compound_rec_copy)] = {"substance_id": substance_id, "pkl_id": pkl_id}
+            elif len(substance_id) <= 5 and pkl_id is None: # case where substance_id is valid 
+                pkl_id = substance_id
+                compound_rec_copy.loc[len(compound_rec_copy)] = {"substance_id": substance_id, "pkl_id": pkl_id}
+            elif pkl_id is not None and len(pkl_id) <= 5: # case where pkl_id is valid
                 # no need to update the record 
-                five_char_id = five_char_id
+                pkl_id = pkl_id
 
             smiles_no_lg, lig_atom, wh_found = covalent_utils.remove_leaving_group(lig[1])
             if wh_found is None: 
@@ -128,17 +124,8 @@ def generate_csv(pdb, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
                 continue 
             
              # makes pkl file if dne
-            covalent_utils.process_covalent_smiles(ccd_db=boltz_cache_pkls, smiles=smiles_no_lg, compound_id=five_char_id) 
+            covalent_utils.process_covalent_smiles(ccd_db=boltz_cache_pkls, smiles=smiles_no_lg, compound_id=pkl_id) 
             # update tmp_csv
-            writer.writerow([smiles_no_lg, five_char_id, substance_id, wh_found, lig_atom, seq, int(res_idx), res_name, res_atom])
+            writer.writerow([smiles_no_lg, pkl_id, substance_id, wh_found, lig_atom, seq, int(res_idx), res_name, res_atom])
 
     return tmp_csv 
-
-        
-    
-                
-
-
-
-
-

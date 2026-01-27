@@ -1,7 +1,7 @@
 import os
 import pandas as pd
-import sys
 import json 
+import shutil
 import time 
 import argparse
 from BoltzCov.update_ligands import pull_cdd_ligs, update_predictions
@@ -74,6 +74,13 @@ def main(args):
     cdd_api_key, vault_id, readout_query, mol_query, boltz_cache, readout_id, output_dir)):
         raise ValueError("Please make sure all required arguments are given in the input JSON.")
 
+    if os.path.exists(boltz_cache):
+        print("[WARNING] Boltz Cache exists and will be deleting.")
+        print("Cancel in 5 seconds to prevent deletion. Ensure the cache directory is empty.")
+        time.sleep(5)
+        shutil.rmtree(boltz_cache)
+    os.makedirs(boltz_cache)
+
     # pull ligand information and experiment readouts 
     print("1. Pulling ligands from CDD vault using the following queries:\n"
       f"Readout query: {readout_query}\n"
@@ -141,7 +148,9 @@ def main(args):
         dock_compounds = updated_metadata[['substance_id', 'inchi_key', 'smiles']]
 
         # call submit job  
-        submit_job.run_boltz_cov(protein_name, prot_file, res_idx, lig_chain, outdir, msa_path, )
+        submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, 
+                      res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
+                      output_dir=output_dir, slurm_template=slurm_template, msa_path=msa_path)
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
