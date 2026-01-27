@@ -1,13 +1,8 @@
 # use boltz_analysis_env 
 import requests
-import math
-import sys
-import os
-sys.path.append(os.path.expandvars("${TRIAGGED}/covalent_module/analysis"))
-from analyize_boltz_preds import mean_metrics
-from analysis_utils import read_boltz_predictions
-import numpy as np
-import pandas as pd
+import time
+import requests
+import math 
 
 def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
     '''
@@ -31,242 +26,136 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
     readout_rows_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/readout_rows"
     molecules_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/molecules"
 
-    readout_response = requests.get(readout_rows_url, headers=headers, params=readout_query)
+    readout_query_clean = {k: v for k, v in readout_query.items() if k != 'page_size'}
+    mol_query_clean = {k: v for k, v in mol_query.items() if k != 'page_size'}
+    
+    readout_query_clean["async"] = "true"
+    mol_query_clean["async"] = "true"
+
+    readout_response = requests.get(readout_rows_url, headers=headers, params=readout_query_clean)
     readout_response.raise_for_status()
-    readouts = readout_response.json()
-
-    molecules_response = requests.get(molecules_url, headers=headers, params=mol_query)
+    readout_export = readout_response.json()
+    
+    molecules_response = requests.get(molecules_url, headers=headers, params=mol_query_clean)
     molecules_response.raise_for_status()
-    molecules = molecules_response.json()
+    molecules_export = molecules_response.json()
 
+    readout_export_id = readout_export.get("id")
+    molecules_export_id = molecules_export.get("id")
+    
+    if not readout_export_id or not molecules_export_id:
+        raise Exception("Failed to get export IDs")
+
+    def get_export_data(export_id):
+        export_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/exports/{export_id}"
+        max_attempts = 120
+        attempt = 0
+        
+        while attempt < max_attempts:
+            time.sleep(5)
+            attempt += 1
+            
+            response = requests.get(export_url, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+            
+            if "objects" in data:
+                return data
+            
+            status = data.get("status")
+            
+            if status == "finished":
+                return data
+            elif status in ["new", "started", "pending", None]:
+                continue
+            elif status == "failed":
+                raise Exception(f"Export failed: {data.get('error', 'Unknown')}")
+            else:
+                print(f"Debug - status: {status}, full response: {data}")
+                continue
+        
+        raise Exception("Export timed out")
+
+    readouts = get_export_data(readout_export_id)
+    molecules = get_export_data(molecules_export_id)
+    
     return readouts, molecules
 
-def reorg_query(readouts, molecules, filter=False):
+def get_ic50s(readouts, molecules):
     '''
-    Combines, matches and reorganizes readouts and molecule IDs from CDD vault. 
-    
-    readouts (dict): json response from CDD vault query for readout rows. has 'objects' attribute. 
-    eg. {'count': 1161,
-        'offset': 0,
-        'page_size': 1000,
-        'objects': [{'id': 1198645303,...}]}
-    molecules (dict): json reponse from CDD vault query for molecules in vault. has 'objects' attribute. 
-    eg. {'count': 353,
-        'offset': 0,
-        'page_size': 1000,
-        'objects': [{'id': 159552986, ...}]} 
-    filter (bool): if True, will filter out molecules without 'TJB' in synonym. 
-
-    returns (dict): molecule ids matched to ic50s (nM) for hscpl and tgcpl. includes log(ic50 uM) converted readouts. 
-    eg. {'VMCC-0000135': {'tgcpl_ic50': 2500.0,
-        'tgcpl_ic50_log': 0.3979400086720376,
-        'hscpl_ic50': 2300.0,
-        'hscpl_ic50_log': 0.36172783601759284,
-        'smiles': 'CCNc1nc(C#N)nc(N2CCOCC2)n1'},
-        'VMCC-0000147': {'tgcpl_ic50': 28.8433333333333...}}
+    Loads MEAN ic50 values for both TgCPL and HsCPL.
+    Uses two DataFrames where 'molecule' from readouts matches in 'id' in molecules and
+    Returns experimental data and metadata of compounds from user CDD-Vault. 
     '''
-    
-    molecule_ids = {}
-    no_tjb = []
-    for row in molecules['objects']:
-        if not filter: 
-            molecule_ids[row['id']] = {row['name']: row['smiles']}
+    metadata_df = []
+    exp_readouts = []
+    for row in molecules['objects']: # per molecule 
+        molecule_id = row['id']
+        substance_id = row['name']
+        inchi_key = row['inchi_key']
+        inchi = row['inchi']
+        smiles = row['smiles']
+        syn = row["synonyms"]
+        syn_str = (',').join(syn)
 
-        if filter:
-            for syn_name in row.get('synonyms', []):
-                if 'TJB' in syn_name:
-                    molecule_ids[row['id']] = {row['name']: row['smiles']}
-                    break
-                else:
-                    no_tjb.append(row['name'])
-
-    if filter: print("no TJB in synonym name:", no_tjb)
-
-    readouts_and_ids = {}
-    for row in readouts["objects"]:
-        mol_read = {}
-
-        for readout_id, readout_data in row["readouts"].items():
-            readout_val = readout_data.get("value")
-
-            # Map readout ID → experiment name
-            if readout_id == "1125023":
-                exp_name = "tgcpl_ic50"
-            elif readout_id == "1125024":
-                exp_name = "hscpl_ic50"
-            else:
-                continue  # skip unknown readouts
-
-            # Store raw IC50 (nM)
-            mol_read[exp_name] = readout_val
-            if readout_val and readout_val > 0:
-                mol_read[f"{exp_name}_log"] = math.log10(readout_val / 1000)
-            else:
-                mol_read[f"{exp_name}_log"] = None
-
-        try:
-            mol_name = next(iter(molecule_ids[row["molecule"]]))
-            smiles = molecule_ids[row["molecule"]][mol_name]
-
-            mol_read["smiles"] = smiles
-            readouts_and_ids[mol_name] = mol_read
-
-        except KeyError:
-            pass
-
-    return readouts_and_ids
-
-# updating comound_records 
-def append_comment(df, idx, col, msg, add_comment=False):
-    '''Adds comments to the spread sheet based on whether a 
-    prediction and experimental readout or not was present.
-    '''
-    if add_comment:
-        current = df.at[idx, col]
-        if not isinstance(current, str):
-            current = ''
-        df.at[idx, col] = current + msg
-
-def lookup_compound_id(vault_id, compound_record):
-    '''Matches vault_id from CDD vault with 5-char unique .pkl identifying key'''
-    if 'vault_id' not in compound_record.columns or 'compound_id' not in compound_record.columns:
-        print('[ERROR] add vault_id and compound_id columns')
-        return None
-    match = compound_record.loc[compound_record['vault_id'] == vault_id, 'compound_id']
-    compound_id = match.iloc[0] if not match.empty else None
-    return compound_id
-
-# need to pull experimental info from cdd vault 
-def add_experiment_reads(cdd_query, compound_rec_df): 
-    '''
-        Adding missing TgCPL/HsCPL info to records.
-        NaN/Empty values if data not present. 
+        # one per molecule
+        metadata_df.append({    
+                    "vault_mol_id" : molecule_id,
+                    "substance_id" : substance_id,
+                    "inchi_key": inchi_key,
+                    "inchi": inchi, 
+                    "smiles": smiles,
+                    "synonyms": syn_str
+                })
         
-        cdd_query (dict): organized query results 
-        eg. {'VMCC-0000135': {'tgcpl_ic50': 2500.0,
-                'tgcpl_ic50_log': 0.3979400086720376,
-                'hscpl_ic50': 2300.0,
-                'hscpl_ic50_log': 0.36172783601759284,
-                'smiles': 'CCNc1nc(C#N)nc(N2CCOCC2)n1'}, ...}
+        # must find molecule match in readout
+        tgcpl_log_ic50 = None
+        hscpl_log_ic50 = None
+        for r in readouts['objects']: 
+            if r['molecule'] == str(molecule_id) or r['molecule'] == int(molecule_id): 
+                for key, val in r['readouts'].items():
+                    # print(molecule_id, key, val['value'])
+                    if str(key) == "1125023":
+                        tgcpl_mean_ic50 = val['value'] 
+                        tgcpl_log_ic50 = math.log10(tgcpl_mean_ic50 / 1000)
+                    elif str(key) == "1125024": 
+                        hscpl_mean_ic50 = val['value']
+                        hscpl_log_ic50 = math.log10(hscpl_mean_ic50 / 1000)
+                    else: 
+                        continue
+
+        exp_readouts.append({
+            "vault_mol_id" : molecule_id,
+            "substance_id": row['name'],
+            "inchi_key": row['inchi_key'],
+            "mean_tgcpl_log_ic50 (uM)": tgcpl_log_ic50,
+            "mean_hscpl_log_ic50 (uM)": hscpl_log_ic50 # to do: pulling reps info
+        })
+    return exp_readouts, metadata_df
+
+def update_local_data(old_metadata, old_readouts, new_metadata, new_readouts):
     '''
-    # update regardless of whether the value is there or not, based on query date
-    counter = 0
-    for row in compound_rec_df.itertuples(index=True):
-        vault_id = row.vault_id
-        if vault_id not in cdd_query:
-            append_comment(
-                compound_rec_df,
-                row.Index,
-                'comments',
-                'IC50 not in TJB TgCPL set, IC50 not in TJB HsCPL set,'
-            )
+    All inputs must be Pandas.DataFrames. 
+    Will overwrite existing CSVs!!! 
+    '''
+    # Metadata: update existing and add new
+    merged_metadata = old_metadata.merge(new_metadata, on='vault_mol_id', how='outer', suffixes=('_old', '_new'))
+
+    for col in old_metadata.columns:
+        if col == 'vault_mol_id':
             continue
+        if f'{col}_new' in merged_metadata.columns:
+            merged_metadata[col] = merged_metadata[f'{col}_new'].fillna(merged_metadata[f'{col}_old'])
+            merged_metadata.drop([f'{col}_old', f'{col}_new'], axis=1, inplace=True)
 
-        entry = cdd_query[vault_id]
-        if 'tgcpl_ic50_log' in entry:
-            compound_rec_df.at[row.Index, 'tgcpl_log_ic50'] = entry['tgcpl_ic50_log']
-            compound_rec_df.at[row.Index, 'tgcpl_ic50'] = entry['tgcpl_ic50']
-            counter += 1
-        else:
-            append_comment(
-                compound_rec_df,
-                row.Index,
-                'comments',
-                'IC50 not in TJB TgCPL set,'
-            )
+    # Readouts: update existing and add new
+    merged_readouts = old_readouts.merge(new_readouts, on='vault_mol_id', how='outer', suffixes=('_old', '_new'))
 
-        if 'hscpl_ic50_log' in entry:
-            compound_rec_df.at[row.Index, 'hscpl_log_ic50'] = entry['hscpl_ic50_log']
-            compound_rec_df.at[row.Index, 'hscpl_ic50'] = entry['hscpl_ic50']
-            counter += 1
-        else:
-            append_comment(
-                compound_rec_df,
-                row.Index,
-                'comments',
-                ' IC50 not in TJB HsCPL set,'
-            )
-            
-    print(counter, " experimental readouts updated")
+    for col in old_readouts.columns:
+        if col == 'vault_mol_id':
+            continue
+        if f'{col}_new' in merged_readouts.columns:
+            merged_readouts[col] = merged_readouts[f'{col}_new'].fillna(merged_readouts[f'{col}_old'])
+            merged_readouts.drop([f'{col}_old', f'{col}_new'], axis=1, inplace=True)
 
-    return compound_rec_df
-
-def add_smiles(cdd_query, compound_rec_df):
-    '''
-    Adds smiles from ccd query. 
-    '''
-    for row in compound_rec_df.itertuples(index=True):
-        if pd.isna(row.smiles) and row.vault_id in cdd_query:
-            compound_rec_df.at[row.Index, 'smiles'] = cdd_query[row.vault_id]['smiles']
-    return compound_rec_df
-
-def add_predictions(predictions_dir, compound_rec_df, target):
-    '''
-    Adding missing TgCPL/HsCPL predicted ic50s to records.
-    '''
-    all_reps = [
-                os.path.join(predictions_dir, f)
-                for f in os.listdir(predictions_dir)
-                if os.path.isdir(os.path.join(predictions_dir, f))
-            ]
-    
-    if 'tgcpl' in target:
-        counter = 0
-        for row in compound_rec_df.itertuples(index=True):
-            compound_id = lookup_compound_id(row.vault_id, compound_rec_df) 
-            if np.isnan(row.tgcpl_pred_log_ic50) and compound_id is not None and len(all_reps) > 1:
-                _, mean_preds  = mean_metrics(all_reps[0], score_col='Pred log10(IC50)')
-                try:
-                    pred_ic50 = mean_preds.loc[mean_preds['compound_id'] == compound_id, 'mean'].values[0]
-                    compound_rec_df.at[row.Index, 'tgcpl_pred_log_ic50'] = pred_ic50
-                    counter += 1
-                except IndexError:
-                    pred_ic50 = None
-                    append_comment(compound_rec_df, row.Index, 'comments', ' missing in TgCPL Pred,')
-
-            elif np.isnan(row.tgcpl_pred_log_ic50) and compound_id is not None and len(all_reps) == 1: # only 1 rep present
-                preds = read_boltz_predictions(all_reps[0], reps=False)
-                try:
-                    pred_ic50 = preds.loc[preds['compound_id'] == compound_id, 'Pred log10(IC50)'].values[0]
-                    compound_rec_df.at[row.Index, 'tgcpl_pred_log_ic50'] = pred_ic50
-                    counter += 1
-                except IndexError:
-                    pred_ic50 = None
-                    append_comment(compound_rec_df, row.Index, 'comments', ' missing in TgCPL Pred,')
-            else:
-                append_comment(compound_rec_df, row.Index, 'comments', ' missing in TgCPL Pred,')
-
-        print(f"{counter} predictions were updated for tgcpl")  
-
-    elif 'hscpl' in target:
-        counter = 0 
-        for row in compound_rec_df.itertuples(index=True):
-            compound_id = lookup_compound_id(row.vault_id, compound_rec_df) 
-            if np.isnan(row.hscpl_pred_log_ic50) and compound_id is not None and len(all_reps) > 1:  # check if more than 1 rep present 
-                    _, mean_preds  = mean_metrics(all_reps[0], score_col='Pred log10(IC50)')
-                    try:
-                        pred_ic50 = mean_preds.loc[mean_preds['compound_id'] == compound_id, 'mean'].values[0]
-                        compound_rec_df.at[row.Index, 'hscpl_pred_log_ic50'] = pred_ic50
-                        counter +=1 
-                    except IndexError:
-                        pred_ic50 = None
-                        append_comment(compound_rec_df, row.Index, 'comments', ' missing in HsCPL Pred,')
-
-            elif np.isnan(row.tgcpl_pred_log_ic50) and compound_id is not None and len(all_reps) == 1: # only 1 rep present
-                preds = read_boltz_predictions(all_reps[0], reps=False)
-                try:
-                    pred_ic50 = preds.loc[preds['compound_id'] == compound_id, 'Pred log10(IC50)'].values[0]
-                    compound_rec_df.at[row.Index, 'hscpl_pred_log_ic50'] = pred_ic50
-                    counter+=1 
-                except IndexError:
-                    pred_ic50 = None
-                    append_comment(compound_rec_df, row.Index, 'comments', ' missing in HsCPL Pred,')
-
-            else:
-                append_comment(compound_rec_df, row.Index, 'comments', ' missing in HsCPL Pred,')   
-
-        print(f"{counter} predictions were updated for hscpl")  
-
-    return compound_rec_df
-
-
+    return merged_metadata, merged_readouts
