@@ -3,22 +3,25 @@ import requests
 import time
 import requests
 import math 
+import pandas as pd 
 
 def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
     '''
     Queries CDD Vault and returns query results.
+    Supports both sync (small queries) and async (large queries) modes.
+    
     Eg. 
     API_KEY = "NTc3Mnw1WFFxeC9mOE1SZ09NSnZjY2VmWVFWVFpIUGhJUUJLWUVrcG1rOEM2WnRWTkZQK0pSQT09"
     VAULT_ID = 7171 
     
-    params = {
-    "modified_after": "2023-09-01T00:00:00Z",  # Filter molecules created after sept 2025
-    "page_size": 1000,
-    "protocols": 89683
+    readout_query = {
+        "modified_after": "2023-09-01T00:00:00Z",
+        "page_size": 10,
+        "protocols": 89683
     }
-    params = {
-    "modified_after": "2023-09-01T00:00:00Z",  # Filter molecules created after sept 2025
-    "page_size": 1000
+    mol_query = {
+        "modified_after": "2023-09-01T00:00:00Z",
+        "page_size": 10
     }
     '''
     headers = {"X-CDD-Token": API_KEY}
@@ -26,11 +29,17 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
     readout_rows_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/readout_rows"
     molecules_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/molecules"
 
-    readout_query_clean = {k: v for k, v in readout_query.items() if k != 'page_size'}
-    mol_query_clean = {k: v for k, v in mol_query.items() if k != 'page_size'}
+    # Check if page_size > 1000, use async mode
+    use_async = readout_query.get('page_size', 0) >= 1000 or mol_query.get('page_size', 0) >= 1000
     
-    readout_query_clean["async"] = "true"
-    mol_query_clean["async"] = "true"
+    if use_async:
+        readout_query_clean = {k: v for k, v in readout_query.items() if k != 'page_size'}
+        mol_query_clean = {k: v for k, v in mol_query.items() if k != 'page_size'}
+        readout_query_clean["async"] = "true"
+        mol_query_clean["async"] = "true"
+    else:
+        readout_query_clean = readout_query.copy()
+        mol_query_clean = mol_query.copy()
 
     readout_response = requests.get(readout_rows_url, headers=headers, params=readout_query_clean)
     readout_response.raise_for_status()
@@ -40,44 +49,48 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
     molecules_response.raise_for_status()
     molecules_export = molecules_response.json()
 
-    readout_export_id = readout_export.get("id")
-    molecules_export_id = molecules_export.get("id")
-    
-    if not readout_export_id or not molecules_export_id:
-        raise Exception("Failed to get export IDs")
-
-    def get_export_data(export_id):
-        export_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/exports/{export_id}"
-        max_attempts = 120
-        attempt = 0
+    if use_async:
+        readout_export_id = readout_export.get("id")
+        molecules_export_id = molecules_export.get("id")
         
-        while attempt < max_attempts:
-            time.sleep(5)
-            attempt += 1
-            
-            response = requests.get(export_url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            
-            if "objects" in data:
-                return data
-            
-            status = data.get("status")
-            
-            if status == "finished":
-                return data
-            elif status in ["new", "started", "pending", None]:
-                continue
-            elif status == "failed":
-                raise Exception(f"Export failed: {data.get('error', 'Unknown')}")
-            else:
-                print(f"Debug - status: {status}, full response: {data}")
-                continue
-        
-        raise Exception("Export timed out")
+        if not readout_export_id or not molecules_export_id:
+            raise Exception("Failed to get export IDs")
 
-    readouts = get_export_data(readout_export_id)
-    molecules = get_export_data(molecules_export_id)
+        def get_export_data(export_id):
+            export_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/exports/{export_id}"
+            max_attempts = 120
+            attempt = 0
+            
+            while attempt < max_attempts:
+                time.sleep(5)
+                attempt += 1
+                
+                response = requests.get(export_url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                
+                if "objects" in data:
+                    return data
+                
+                status = data.get("status")
+                
+                if status == "finished":
+                    return data
+                elif status in ["new", "started", "pending", None]:
+                    continue
+                elif status == "failed":
+                    raise Exception(f"Export failed: {data.get('error', 'Unknown')}")
+                else:
+                    print(f"Debug - status: {status}, full response: {data}")
+                    continue
+            
+            raise Exception("Export timed out")
+
+        readouts = get_export_data(readout_export_id)
+        molecules = get_export_data(molecules_export_id)
+    else:
+        readouts = readout_export 
+        molecules = molecules_export 
     
     return readouts, molecules
 
@@ -87,8 +100,8 @@ def get_ic50s(readouts, molecules):
     Uses two DataFrames where 'molecule' from readouts matches in 'id' in molecules and
     Returns experimental data and metadata of compounds from user CDD-Vault. 
     '''
-    metadata_df = []
-    exp_readouts = []
+    metadata_list = []
+    exp_readouts_list = []
     for row in molecules['objects']: # per molecule 
         molecule_id = row['id']
         substance_id = row['name']
@@ -99,7 +112,7 @@ def get_ic50s(readouts, molecules):
         syn_str = (',').join(syn)
 
         # one per molecule
-        metadata_df.append({    
+        metadata_list.append({    
                     "vault_mol_id" : molecule_id,
                     "substance_id" : substance_id,
                     "inchi_key": inchi_key,
@@ -124,14 +137,14 @@ def get_ic50s(readouts, molecules):
                     else: 
                         continue
 
-        exp_readouts.append({
+        exp_readouts_list.append({
             "vault_mol_id" : molecule_id,
             "substance_id": row['name'],
             "inchi_key": row['inchi_key'],
             "mean_tgcpl_log_ic50 (uM)": tgcpl_log_ic50,
             "mean_hscpl_log_ic50 (uM)": hscpl_log_ic50 # to do: pulling reps info
         })
-    return exp_readouts, metadata_df
+    return pd.DataFrame(exp_readouts_list), pd.DataFrame(metadata_list)
 
 def update_local_data(old_metadata, old_readouts, new_metadata, new_readouts):
     '''

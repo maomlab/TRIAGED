@@ -40,7 +40,7 @@ def literal_list_representer(dumper, data):
     return dumper.represent_sequence("tag:yaml.org,2002:seq", data, flow_style=True)
 yaml.add_representer(LiteralList, literal_list_representer)
 
-def create_boltz_yamls(csv_file, output_dir, msa_path, ccd_db):
+def create_boltz_yamls(csv_file, output_dir, msa_path, boltz_cache):
     '''
     Creates YAML files from a CSV of ligands and proteins.
 
@@ -52,6 +52,8 @@ def create_boltz_yamls(csv_file, output_dir, msa_path, ccd_db):
     '''
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
+
+    boltz_cache_pkls = os.path.join(boltz_cache, 'cache_pkls')
     
     # load csv and check columns
     csvfile = pd.read_csv(csv_file)
@@ -74,7 +76,7 @@ def create_boltz_yamls(csv_file, output_dir, msa_path, ccd_db):
             invalid_compounds.append(ccd)
             continue
         # check if ccd pkl file exists
-        ccd_file = os.path.join(ccd_db, f"{ccd}.pkl")
+        ccd_file = os.path.join(boltz_cache_pkls, f"{ccd}.pkl")
         if not os.path.isfile(ccd_file):
             print(f"[ERROR] '{ccd_file}' does not exist for {ccd}. \
                   Please use preprocessing script (/preprocessing/make_input_csv.py) to generate it.")

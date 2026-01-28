@@ -5,8 +5,8 @@ import shutil
 import time 
 import argparse
 from BoltzCov.update_ligands import pull_cdd_ligs, update_predictions
-from BoltzCov.run_boltz import submit_job
 
+# use ccd_pkl
 def read_json_args(json_file):
     '''
     Reads the json input file with arguments required to dock covalently with Boltz-2.
@@ -22,7 +22,7 @@ def read_json_args(json_file):
 
         cdd_api_key = run_arguments.get("CDD_API_KEY", None)
         vault_id = run_arguments.get("VAULT_ID", None) # number of the vault in CDD 
-        readout_query = run_arguments.get("READOUT_KEY", None) # is a dict 
+        readout_query = run_arguments.get("READOUT_QUERY", None) # is a dict 
         mol_query = run_arguments.get("MOL_QUERY", None) # is a dict 
         
         pdb = run_arguments.get("PDB")
@@ -65,17 +65,34 @@ def main(args):
     '''
     # loading input arguments from user 
     (record_path,
-    cdd_api_key, vault_id, readout_query, mol_query, readout_id,
+    cdd_api_key, vault_id, readout_query, mol_query,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template,
     VERBOSE, output_dir) = read_json_args(args.json_file)
+    import ipdb; ipdb.set_trace()
+    missing = []
+    params = {
+        'pdb': pdb, 
+        'res_idx': res_idx, 
+        'ligand_chain': ligand_chain, 
+        'slurm_template': slurm_template,
+        'cdd_api_key': cdd_api_key, 
+        'vault_id': vault_id, 
+        'readout_query': readout_query, 
+        'mol_query': mol_query, 
+        'boltz_cache': boltz_cache, 
+        'output_dir': output_dir
+    }
 
-    if any(x is None for x in (pdb, res_idx, ligand_chain, slurm_template,
-    cdd_api_key, vault_id, readout_query, mol_query, boltz_cache, readout_id, output_dir)):
-        raise ValueError("Please make sure all required arguments are given in the input JSON.")
+    for name, value in params.items():
+        if value is None:
+            missing.append(name)
 
+    if missing:
+        raise ValueError(f"Missing required arguments: {', '.join(missing)}")
+    
     if os.path.exists(boltz_cache):
-        print("[WARNING] Boltz Cache exists and will be deleting.")
-        print("Cancel in 5 seconds to prevent deletion. Ensure the cache directory is empty.")
+        print("[WARNING] Boltz Cache exists and will be deleted.")
+        print("Cancel in 5 seconds to prevent deletion. Ensure the cache directory is empty or choose a different directory.")
         time.sleep(5)
         shutil.rmtree(boltz_cache)
     os.makedirs(boltz_cache)
@@ -124,15 +141,16 @@ def main(args):
             pd.DataFrame(updated_metadata).to_csv(old_meta, index=False)
             pd.DataFrame(updated_readouts).to_csv(old_exp, index=False)
     
-    if VERBOSE: print("-SUCCESS- 2. Record files updated with CDD-Vault information.")
+    if VERBOSE: print("-SUCCESS- Record files updated with CDD-Vault information.")
     
     # obtain list of ligands that need to be docked 
-    protein_name = os.path.splittext(os.path.basename(pdb))[0]
+    protein_name = os.path.splitext(os.path.basename(pdb))[0]
     print("3. Checking exisiting predictions and performing Docking with Boltz-2 Covalent.")
     pred_rec = os.path.join(record_path, 'predictions.csv')
     if os.path.exists(pred_rec):
         pred_df = pd.read_csv(pred_rec)
-        no_pred_prot = update_predictions.fetch_new(pred_df, updated_metadata, protein_name)
+        metadata_df = pd.read_csv(old_meta)
+        no_pred_prot = update_predictions.fetch_new(pred_df, metadata_df, protein_name)
 
         error_csv = os.path.join(record_path, 'errored.csv')
         if os.path.exists(error_csv): # update list to disinclude errored ligands 
@@ -141,15 +159,16 @@ def main(args):
         else: 
             if VERBOSE: print("No errored compounds. Attempting to Dock all compounds.")
 
-    elif not os.path.exists(pred_rec):
-        # simply assume no prediction was ever made 
+    elif not os.path.exists(pred_rec): # simply assume no prediction was ever made 
+        metadata_df = pd.read_csv(old_meta)
         if VERBOSE: print("predictions.csv was not found. Attempting to Dock all compounds.")
-        dock_compounds = updated_metadata[['substance_id', 'inchi_key', 'smiles']]
+        dock_compounds = metadata_df[['substance_id', 'inchi_key', 'smiles']]
 
-        # call submit job  
-        submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, 
-                      res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
-                      output_dir=output_dir, slurm_template=slurm_template, msa_path=msa_path)
+    # call submit job  
+    from BoltzCov.run_boltz import submit_job
+    submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, 
+                    res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
+                    output_dir=output_dir, slurm_template=slurm_template, msa_path=msa_path)
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

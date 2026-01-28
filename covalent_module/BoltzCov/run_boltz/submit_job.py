@@ -1,6 +1,7 @@
 import os 
 import shutil
 import subprocess
+from datetime import datetime
 from BoltzCov.preprocessing import make_csv_for_yaml, setup_cov_yamls
 
 def run_boltz_cov(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE, output_dir, slurm_template, msa_path=None):
@@ -14,7 +15,7 @@ def run_boltz_cov(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERB
 
     output_dir (Path): Path to output directory where final cleaned up predictions will be deposited. 
     '''
-    protein_name = os.path.splittext(os.path.basename(prot_file))[0]
+    protein_name = os.path.splitext(os.path.basename(prot_file))[0]
     missing_cols = [c for c in ['substance_id', 'smiles', 'inchi_key'] if c not in ligand_df.columns]
     if missing_cols:
         raise ValueError(f"LIGAND_CSV is missing expected columns: {missing_cols}")
@@ -25,7 +26,7 @@ def run_boltz_cov(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERB
     
     yaml_cache = os.path.join(boltz_cache_prot, 'yaml_cache')
     # make yamls and get list of them
-    yaml_list = setup_cov_yamls.create_boltz_yamls(tmp_docking_csv, yaml_cache, msa_path)
+    yaml_list = setup_cov_yamls.create_boltz_yamls(csv_file=tmp_docking_csv, msa_path=msa_path, boltz_cache=boltz_cache_prot, output_dir=yaml_cache)
 
     job_list_file = os.path.join(boltz_cache_prot, "job_input_list.txt")
     if os.path.exists(job_list_file):
@@ -33,7 +34,13 @@ def run_boltz_cov(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERB
 
     for yaml in yaml_list:
             pkl_id = os.path.basename(yaml).replace(".yaml", "")
-            pred_lig_dir = os.path.join(boltz_cache_prot, pkl_id)
+            
+            now = datetime.now()
+            datetime_str = now.strftime("%Y-%m-%d_%H-%M-%S") 
+
+            pkl_datetime = "_".join([datetime_str, pkl_id])  
+            pred_lig_dir = os.path.join(boltz_cache_prot, pkl_datetime)
+            
             os.makedirs(pred_lig_dir, exist_ok=True)
             
             # moves yaml regardless of prediction/yaml existing
@@ -44,7 +51,9 @@ def run_boltz_cov(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERB
             with open(job_list_file, 'a') as f: 
                 f.write(f"{yaml_path} {pred_lig_dir}\n")
     
+    
     slurm_script = os.path.join(boltz_cache_prot, os.path.basename(slurm_template))
+    shutil.copy(slurm_template, slurm_script)
     # submit jobs
     subprocess.run(
          ["sbatch", slurm_script, job_list_file],

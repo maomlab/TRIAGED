@@ -4,7 +4,7 @@ from datetime import date
 import csv 
 import string 
 import random 
-from BoltzCov.preprocessing import covalent_utils, pdb_to_fasta
+from BoltzCov.preprocessing import covalent_utils, pdb_to_fasta, ccd_utils
 
 def validate_file(filename):
     ''' Validates if the file is either a PDB or a TXT file.'''
@@ -18,7 +18,6 @@ def validate_file(filename):
 
 def process_protein(prot_file, idx, lig_chain):
     '''Returns protein information.'''
-    VERBOSE = os.environ.get("VERBOSE", "FALSE").upper() == "TRUE"
     ext = validate_file(prot_file)
     if ext==".pdb":
         sequence = pdb_to_fasta.build_sequence(prot_file, lig_chain)
@@ -26,6 +25,7 @@ def process_protein(prot_file, idx, lig_chain):
         with open(prot_file, 'r') as f:
             content = f.read()
             sequence = "".join(content.split())
+    idx = int(idx)
     if idx < 1:
         idx = 0
     elif idx > len(sequence):
@@ -34,10 +34,8 @@ def process_protein(prot_file, idx, lig_chain):
         res_aa = sequence[idx-1]
 
     res_name = pdb_to_fasta.residue_to_three_letter(res_aa)
-    if VERBOSE: print("Boltz will now dock to this residue: ", res_name)
 
     if covalent_utils.verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
-        if VERBOSE: print(sequence)
         raise ValueError(f"[ERROR] res_idx {idx} does NOT map to a covalent residue. " \
         "Please verify res_idx matches expected residue in sequence.")
     
@@ -81,14 +79,16 @@ def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBO
     # write header once
     expected_header = ["smiles", "substance_id", "pkl_id" ,"WH_Type", "Lig_Atom", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
     write_header = True
-    with open(tmp_csv, "r") as existing:
-        reader = csv.reader(existing)
-        first_row = next(reader, None)
-        if first_row == expected_header:
-            write_header = False  # won't rewrite header
-    
+
+    if os.path.exists(tmp_csv):
+        with open(tmp_csv, "r") as existing:
+            reader = csv.reader(existing)
+            first_row = next(reader, None)
+            if first_row == expected_header:
+                write_header = False
+
     # ligand processing 
-    if VERBOSE: print("- Processig ligands right now.")
+    if VERBOSE: print("- Processing ligands right now.")
     ligands = [(row['substance_id'], row['smiles']) for _, row in ligand_df.iterrows()]
 
     # setup to assign 5-char codes 
@@ -99,7 +99,8 @@ def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBO
     boltz_cache_pkls = os.path.join(boltz_cache, 'cache_pkls')
     os.makedirs(boltz_cache_pkls, exist_ok=True)
 
-    with open(tmp_csv, 'a') as f: 
+    mode = 'a' if os.path.exists(tmp_csv) else 'w'
+    with open(tmp_csv, mode) as f: 
         writer = csv.writer(f)
         if write_header:
             writer.writerow(expected_header)
@@ -118,14 +119,14 @@ def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBO
                 # no need to update the record 
                 pkl_id = pkl_id
 
-            smiles_no_lg, lig_atom, wh_found = covalent_utils.remove_leaving_group(lig[1])
+            smiles_no_lg, lig_atom, wh_found = ccd_utils.remove_leaving_group(lig[1])
             if wh_found is None: 
                 print('skipping ligand', lig[0])
                 continue 
             
-             # makes pkl file if dne
+             # makes pkl file
             covalent_utils.process_covalent_smiles(ccd_db=boltz_cache_pkls, smiles=smiles_no_lg, compound_id=pkl_id) 
             # update tmp_csv
-            writer.writerow([smiles_no_lg, pkl_id, substance_id, wh_found, lig_atom, seq, int(res_idx), res_name, res_atom])
+            writer.writerow([smiles_no_lg, substance_id, pkl_id, wh_found, lig_atom, seq, int(res_idx), res_name, res_atom])
 
     return tmp_csv 
