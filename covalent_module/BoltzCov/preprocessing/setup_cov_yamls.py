@@ -53,7 +53,7 @@ def create_boltz_yamls(csv_file, output_dir, msa_path, boltz_cache):
     # Ensure the output directory exists
     os.makedirs(output_dir, exist_ok=True)
 
-    boltz_cache_pkls = os.path.join(boltz_cache, 'cache_pkls')
+    boltz_cache_pkls = os.path.join(boltz_cache, 'mols')
     
     # load csv and check columns
     csvfile = pd.read_csv(csv_file)

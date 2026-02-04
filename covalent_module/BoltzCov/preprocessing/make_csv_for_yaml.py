@@ -59,7 +59,7 @@ def lookup_compound_id(substance_id, compound_record):
     pkl_id = match.iloc[0] if not match.empty else None
     return pkl_id
 
-def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBOSE):
+def generate_csv(prot_file, ligand_df, run_cache, boltz_cache, res_idx, ligand_chain, VERBOSE):
     '''
     1. Process protein to get sequence, covalent residue name and atom.
     2. Ligand processing: 
@@ -74,7 +74,9 @@ def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBO
     if VERBOSE: print("- Writing CSV to make yamls for docking.")
     today = date.today()
     
-    tmp_csv = os.path.join(boltz_cache, f'ligands_{today}.csv') 
+    os.makedirs(run_cache, exist_ok=True)
+
+    tmp_csv = os.path.join(run_cache, f'ligands_{today}.csv') 
 
     # write header once
     expected_header = ["smiles", "substance_id", "pkl_id" ,"WH_Type", "Lig_Atom", "Prot_Seq", "Res_Idx", "Res_Name", "Res_Atom"]
@@ -96,7 +98,7 @@ def generate_csv(prot_file, ligand_df, boltz_cache, res_idx, ligand_chain, VERBO
     new_rows_list = [{'substance_id': name, 'pkl_id': 'XXXXXXX'} for name, _ in ligands]
     compound_rec_copy = pd.concat([compound_rec_df, pd.DataFrame(new_rows_list)], ignore_index=True)
 
-    boltz_cache_pkls = os.path.join(boltz_cache, 'cache_pkls')
+    boltz_cache_pkls = os.path.join(boltz_cache, 'mols')
     os.makedirs(boltz_cache_pkls, exist_ok=True)
 
     mode = 'a' if os.path.exists(tmp_csv) else 'w'

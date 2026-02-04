@@ -5,6 +5,7 @@ import shutil
 import time 
 import argparse
 from BoltzCov.update_ligands import pull_cdd_ligs, update_predictions
+from BoltzCov.run_boltz import pull_boltz2_weights
 
 # use ccd_pkl
 def read_json_args(json_file):
@@ -31,19 +32,21 @@ def read_json_args(json_file):
         ligand_chain = run_arguments.get("LIGAND_CHAIN", None)
         msa_path = run_arguments.get("MSA_PATH")
         msa_path = os.path.expandvars(msa_path) if msa_path else None # dont need to provide this  
-        boltz_cache = run_arguments.get("BOLTZ_CACHE", None) 
-        boltz_cache = os.path.expandvars(boltz_cache) if boltz_cache else None # need this; just easier to have a single location to put temp stuff in and delete it completely after the run
+        run_cache = run_arguments.get("RUN_CACHE", None)
+        run_cache = os.path.expandvars(run_cache) if run_cache else None  # need this; just easier to have a single location to put temp stuff in and delete it completely after the run
+        boltz_cache = run_arguments.get("BOLTZ_CACHE", None)
+        boltz_cache = os.path.expandvars(boltz_cache) if boltz_cache else None  # this is needed for mols/weights downloading 
         slurm_template = run_arguments.get("SLURM_TEMPLATE", None)
         slurm_template = os.path.expandvars(slurm_template) if slurm_template else None 
         
-        VERBOSE = run_arguments.get("VERBOSE", True)
-        output_dir = run_arguments.get("OUTPUT", None)
+        VERBOSE = run_arguments.get("VERBOSE", False)
+        output_dir = run_arguments.get("OUTPUT", None) # include protein name if you want it to be stored in a seperate protein directory 
         output_dir = os.path.expandvars(output_dir) if output_dir else None 
     
     return (
     record_path,
     cdd_api_key, vault_id, readout_query, mol_query,
-    pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template,
+    pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
     VERBOSE, output_dir
     )
 
@@ -66,9 +69,9 @@ def main(args):
     # loading input arguments from user 
     (record_path,
     cdd_api_key, vault_id, readout_query, mol_query,
-    pdb, res_idx, ligand_chain, msa_path, boltz_cache, slurm_template,
+    pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
     VERBOSE, output_dir) = read_json_args(args.json_file)
-    import ipdb; ipdb.set_trace()
+
     missing = []
     params = {
         'pdb': pdb, 
@@ -80,6 +83,7 @@ def main(args):
         'readout_query': readout_query, 
         'mol_query': mol_query, 
         'boltz_cache': boltz_cache, 
+        'run_cache':run_cache,
         'output_dir': output_dir
     }
 
@@ -89,13 +93,20 @@ def main(args):
 
     if missing:
         raise ValueError(f"Missing required arguments: {', '.join(missing)}")
-    
-    if os.path.exists(boltz_cache):
-        print("[WARNING] Boltz Cache exists and will be deleted.")
+
+    if os.path.exists(run_cache):
+        print("[WARNING] Run Cache exists and will be deleted.")
         print("Cancel in 5 seconds to prevent deletion. Ensure the cache directory is empty or choose a different directory.")
         time.sleep(5)
-        shutil.rmtree(boltz_cache)
-    os.makedirs(boltz_cache)
+        shutil.rmtree(run_cache)
+    os.makedirs(run_cache)
+
+    if not os.path.exists(boltz_cache):
+        os.makedirs(boltz_cache)
+        from pathlib import Path
+        print("[WARNING] Boltz weights do not exists.")
+        print("Downloading weights and PDB ligand files...")
+        pull_boltz2_weights.download_boltz2(Path(boltz_cache))
 
     # pull ligand information and experiment readouts 
     print("1. Pulling ligands from CDD vault using the following queries:\n"
@@ -145,30 +156,53 @@ def main(args):
     
     # obtain list of ligands that need to be docked 
     protein_name = os.path.splitext(os.path.basename(pdb))[0]
-    print("3. Checking exisiting predictions and performing Docking with Boltz-2 Covalent.")
+    print("3. Checking existing predictions and performing Docking with Boltz-2 Covalent.")
     pred_rec = os.path.join(record_path, 'predictions.csv')
+    metadata_df = pd.read_csv(old_meta)
+    
+    # exclude previous ligands that had a docking attempt 
+    error_csv = os.path.join(record_path, 'errored.csv')
     if os.path.exists(pred_rec):
         pred_df = pd.read_csv(pred_rec)
-        metadata_df = pd.read_csv(old_meta)
-        no_pred_prot = update_predictions.fetch_new(pred_df, metadata_df, protein_name)
-
-        error_csv = os.path.join(record_path, 'errored.csv')
-        if os.path.exists(error_csv): # update list to disinclude errored ligands 
+        dock_compounds = update_predictions.fetch_new(pred_df, metadata_df, protein_name)
+        if os.path.exists(error_csv):
             error_df = pd.read_csv(error_csv)
-            no_pred_prot = update_predictions.check_attempted(error_df, no_pred_prot) 
+            dock_compounds = update_predictions.check_attempted(error_df, dock_compounds) 
         else: 
-            if VERBOSE: print("No errored compounds. Attempting to Dock all compounds.")
+            if VERBOSE: print("No errored compounds.")
 
-    elif not os.path.exists(pred_rec): # simply assume no prediction was ever made 
-        metadata_df = pd.read_csv(old_meta)
+    else:
         if VERBOSE: print("predictions.csv was not found. Attempting to Dock all compounds.")
         dock_compounds = metadata_df[['substance_id', 'inchi_key', 'smiles']]
+    
+    if VERBOSE: print(f"Docking {len(dock_compounds)} compounds.")
 
-    # call submit job  
+    # submit jobs: run boltz    
     from BoltzCov.run_boltz import submit_job
-    submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, 
+    final_status = submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, run_cache=run_cache,
                     res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
-                    output_dir=output_dir, slurm_template=slurm_template, msa_path=msa_path)
+                    slurm_template=slurm_template, msa_path=msa_path)
+    # check when done 
+    if final_status == "COMPLETED":
+        print("Jobs completed!")
+    else:
+        print(f"Job failed with status: {final_status}")
+    
+    # update errored.csv sheet with compounds without a .cif prediction 
+    # update predictions.csv with all preds and confidence metrics 
+    run_cache_prot = os.path.join(run_cache, protein_name) 
+    update_predictions.check_pred(run_cache_prot=run_cache_prot, record_path=record_path, VERBOSE=VERBOSE, protein_name=protein_name)
+
+    # reorg predictions and delete run_cache dir after moving cif+yamls
+    update_predictions.reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE)
+    if VERBOSE: print(f"Please find final predictions in {output_dir}")
+
+    #shutil.rmtree() only remove the pkls that were just added 
+    update_predictions.remove_pkls(boltz_cache, run_cache_prot, VERBOSE)
+
+    run_cache = os.path.dirname(run_cache_prot)
+    if VERBOSE: print(f"Deleting {run_cache} directory...")
+    shutil.rmtree(run_cache)
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

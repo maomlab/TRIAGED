@@ -2,7 +2,6 @@
 # conda env: boltz_analysis_env 
 # Adapted from Miguel Limcaoco 
 import pandas as pd
-import time 
 import matplotlib.pyplot as plt
 import numpy as np
 import math 
@@ -29,16 +28,17 @@ def read_boltz_predictions(predictions_dir, reps=False):
     :return: Pandas DataFrame with compiled data.
     """
     data = []
-    for compound_name in os.listdir(predictions_dir):
+    list_compound_dirs = [d.name for d in os.scandir(predictions_dir) if d.is_dir()]
+    for compound_name in list_compound_dirs:
         compound_id = compound_name.split('_')[-1]
         compound_dir = os.path.join(predictions_dir, compound_name)
-        results = [compound_dir,  f"boltz_results_{compound_name}", "predictions", f"{compound_name}"]
+        results = [compound_dir,  f"boltz_results_{compound_id}", "predictions", f"{compound_id}"]
         compound_result =  "/".join(results)
         if not os.path.isdir(compound_result):
             continue
 
-        affinity_file = os.path.join(compound_result, f"affinity_{compound_name}.json")
-        confidence_file = os.path.join(compound_result, f"confidence_{compound_name}_model_0.json")
+        affinity_file = os.path.join(compound_result, f"affinity_{compound_id}.json")
+        confidence_file = os.path.join(compound_result, f"confidence_{compound_id}_model_0.json")
 
         if os.path.exists(affinity_file) and os.path.exists(confidence_file):
             with open(affinity_file, 'r') as af:

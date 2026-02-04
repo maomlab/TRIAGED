@@ -168,7 +168,7 @@ def update_local_data(old_metadata, old_readouts, new_metadata, new_readouts):
         if col == 'vault_mol_id':
             continue
         if f'{col}_new' in merged_readouts.columns:
-            merged_readouts[col] = merged_readouts[f'{col}_new'].fillna(merged_readouts[f'{col}_old'])
+            merged_readouts[col] = merged_readouts[f'{col}_new'].fillna(merged_readouts[f'{col}_old']).infer_objects(copy=False)
             merged_readouts.drop([f'{col}_old', f'{col}_new'], axis=1, inplace=True)
 
     return merged_metadata, merged_readouts
