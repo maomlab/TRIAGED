@@ -99,9 +99,14 @@ def get_ic50s(readouts, molecules):
     Loads MEAN ic50 values for both TgCPL and HsCPL.
     Uses two DataFrames where 'molecule' from readouts matches in 'id' in molecules and
     Returns experimental data and metadata of compounds from user CDD-Vault. 
+    Now also extracts all numerical properties from molecules.
     '''
     metadata_list = []
     exp_readouts_list = []
+    
+    # Fields to exclude
+    excluded_fields = {'registration_form_id', 'exact_mass', 'cdd_registry_number'}
+    
     for row in molecules['objects']: # per molecule 
         molecule_id = row['id']
         substance_id = row['name']
@@ -111,15 +116,53 @@ def get_ic50s(readouts, molecules):
         syn = row["synonyms"]
         syn_str = (',').join(syn)
 
-        # one per molecule
-        metadata_list.append({    
-                    "vault_mol_id" : molecule_id,
-                    "substance_id" : substance_id,
-                    "inchi_key": inchi_key,
-                    "inchi": inchi, 
-                    "smiles": smiles,
-                    "synonyms": syn_str
-                })
+        # Start with basic metadata
+        metadata_entry = {    
+            "vault_mol_id": molecule_id,
+            "substance_id": substance_id,
+            "inchi_key": inchi_key,
+            "inchi": inchi, 
+            "smiles": smiles,
+            "synonyms": syn_str
+        }
+        
+        # Extract molecular weight if present
+        if 'molecular_weight' in row and row['molecular_weight'] is not None:
+            metadata_entry['molecular_weight'] = float(row['molecular_weight'])
+        
+        # Extract custom fields (numerical properties)
+        if 'fields' in row and isinstance(row['fields'], dict):
+            for field_id, field_data in row['fields'].items():
+                if isinstance(field_data, dict) and 'value' in field_data:
+                    value = field_data['value']
+                    # Add numerical values
+                    if isinstance(value, (int, float)) and value is not None:
+                        # Use field name if available, otherwise use field_id
+                        field_name = field_data.get('name', f'field_{field_id}')
+                        # Clean field name for use as column name
+                        field_name_clean = field_name.replace(' ', '_').replace('(', '').replace(')', '').lower()
+                        
+                        # Skip excluded fields
+                        if field_name_clean not in excluded_fields and field_name.lower() not in excluded_fields:
+                            metadata_entry[field_name_clean] = value
+        
+        # Extract any other top-level numerical fields
+        for key, value in row.items():
+            # Skip non-numerical or already processed fields
+            if key in ['id', 'name', 'inchi_key', 'inchi', 'smiles', 'synonyms', 
+                      'created_at', 'modified_at', 'projects', 'batches', 'fields',
+                      'molecular_weight']:  # Already handled
+                continue
+            
+            # Skip excluded fields
+            if key.lower() in excluded_fields:
+                continue
+            
+            # Add numerical values (int, float)
+            if isinstance(value, (int, float)) and value is not None:
+                metadata_entry[key] = value
+        
+        metadata_list.append(metadata_entry)
         
         # must find molecule match in readout
         tgcpl_log_ic50 = None
@@ -138,12 +181,13 @@ def get_ic50s(readouts, molecules):
                         continue
 
         exp_readouts_list.append({
-            "vault_mol_id" : molecule_id,
+            "vault_mol_id": molecule_id,
             "substance_id": row['name'],
             "inchi_key": row['inchi_key'],
             "mean_tgcpl_log_ic50 (uM)": tgcpl_log_ic50,
             "mean_hscpl_log_ic50 (uM)": hscpl_log_ic50 # to do: pulling reps info
         })
+    
     return pd.DataFrame(exp_readouts_list), pd.DataFrame(metadata_list)
 
 def update_local_data(old_metadata, old_readouts, new_metadata, new_readouts):

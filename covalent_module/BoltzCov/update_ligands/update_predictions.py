@@ -9,41 +9,26 @@ from BoltzCov.analysis import analysis_utils
 def fetch_new(pred_df, metadata_df, protein, min_replicates=3):
     '''
     Checks if predictions of compounds are in predictions.csv records.
+    Works with long-format predictions.csv (with 'protein' column).
     Does NOT check if .cif file of final prediction is present.
-    pred_df: df with names of molecules, confidence values and predictions
+    
+    pred_df: df with names of molecules, confidence values and predictions (long format)
     metadata_df: df with all compound information
     protein: any name for the protein. taken from pdb file name.
     min_replicates: minimum number of non-NaN predictions required (default: 3)
     Returns DataFrame of new compounds that have no predictions yet OR have fewer than min_replicates. 
     '''
-    pred_col = f'pred_log_ic50_{protein}'
     
-    # List of all possible columns for this protein
-    cols_to_check = [
-        f'pred_log_ic50_{protein}',
-        f'pred_log10ic50_{protein}',
-        f'pred_pic50_{protein}',
-        f'binding_probability_{protein}',
-        f'confidence_score_{protein}',
-        f'ptm_{protein}',
-        f'iptm_{protein}',
-        f'ligand_iptm_{protein}',
-        f'protein_iptm_{protein}',
-        f'complex_plddt_{protein}',
-        f'complex_iplddt_{protein}',
-        f'complex_pde_{protein}',
-        f'complex_ipde_{protein}'
-    ]
-    
-    # Get only the columns that exist in pred_df
-    existing_cols = ['substance_id', 'inchi_key'] + [col for col in cols_to_check if col in pred_df.columns]
+    # Filter predictions for this specific protein
+    prot_preds = pred_df[pred_df['protein'] == protein].copy()
+    pred_col = 'pred_log10ic50'  # Column name without protein suffix
     
     # If pred_col doesn't exist, return all compounds as new
-    if pred_col not in pred_df.columns:
+    if pred_col not in prot_preds.columns:
         return metadata_df[['substance_id', 'inchi_key', 'smiles']].copy()
     
-    # Count non-NaN predictions per compound
-    pred_counts = pred_df.groupby(['substance_id', 'inchi_key'])[pred_col].apply(
+    # Count non-NaN predictions per compound for this protein
+    pred_counts = prot_preds.groupby(['substance_id', 'inchi_key'])[pred_col].apply(
         lambda x: x.notna().sum()
     ).reset_index(name='pred_count')
     
@@ -81,7 +66,7 @@ def check_attempted(error_df, dock_compounds):
 
 def get_identifier(pkl_id, boltz_cache_prot, record_path):
     '''
-    Gets unqiue identifier information about molecule.
+    Gets unique identifier information about molecule.
     
     :param pkl_id: ID generated during yaml and pkl creation before docking. 
     :param boltz_cache_prot: Path to raw predictions for a given protein.
@@ -104,6 +89,7 @@ def get_identifier(pkl_id, boltz_cache_prot, record_path):
 def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name):
     ''' 
     Update predictions in predictions.csv. Each run creates a unique row (no averaging).
+    Now saves data in long format with a 'protein' column.
     '''
     boltz_preds = analysis_utils.read_boltz_predictions(predictions_dir=boltz_cache_prot, reps=False)
     
@@ -127,13 +113,15 @@ def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name):
                     'PTM', 'IPTM', 'Ligand IPTM', 'Protein IPTM', 'Complex pLDDT', 
                     'Complex iPLDDT', 'Complex PDE', 'Complex iPDE']
     
-    # Create new row with renamed columns
+    # Create new row WITHOUT protein suffix on metric columns
+    # Add 'protein' as a separate column instead
     prediction_data = pd.DataFrame([{
         'substance_id': substance_id,
         'inchi_key': inchi_key,
         'vault_mol_id': vault_mol_id,
         'boltz_runID': boltz_runID,
-        **{f'{col.lower().replace(" ", "_").replace("(", "").replace(")", "")}_{protein_name}': new_pred[col] 
+        'protein': protein_name,  # Add protein as a separate column
+        **{col.lower().replace(" ", "_").replace("(", "").replace(")", ""): new_pred[col] 
            for col in numeric_cols if col in new_pred.index}
     }])
     
@@ -187,10 +175,12 @@ def check_pred(run_cache_prot, record_path, VERBOSE, protein_name):
 
     print("Record updates complete.")
 
+
 def reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE):
     '''
     Copy .cif and .yaml files to output directory for successful predictions.
     Files are renamed to boltz_runID_pklID format.
+    Also copies hparams.yaml from one of the boltz_results directories to output_dir.
     '''
     predictions_csv = os.path.join(record_path, 'predictions.csv')
     if not os.path.exists(predictions_csv):
@@ -205,8 +195,11 @@ def reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE):
     os.makedirs(cif_dir, exist_ok=True)
     os.makedirs(yaml_dir, exist_ok=True)
     
+    # Flag to track if hparams.yaml has been copied
+    hparams_copied = False
+    
     for _, row in pred_df.iterrows():
-        subtance_id = row['substance_id']
+        substance_id = row['substance_id']
         boltz_runID = row['boltz_runID']
         
         # Find prediction files
@@ -219,9 +212,9 @@ def reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE):
             cif_file = cif_files[0]
             
             # Copy .cif file with new name
-            cif_dest = os.path.join(cif_dir, f"{boltz_runID}_{subtance_id}.cif")
+            cif_dest = os.path.join(cif_dir, f"{boltz_runID}_{substance_id}.cif")
             shutil.copy(cif_file, cif_dest)
-            if VERBOSE: print(f"Copied {subtance_id}.cif for {boltz_runID}")
+            if VERBOSE: print(f"Copied {substance_id}.cif for {boltz_runID}")
             
             # Find and copy yaml file
             # Extract parent directory: run_cache_prot/YYMMDD_HHMMSS_pklID/
@@ -230,11 +223,26 @@ def reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE):
             yaml_files = glob.glob(f'{parent_dir}/*.yaml')
             if yaml_files:
                 yaml_file = yaml_files[0]
-                yaml_dest = os.path.join(yaml_dir, f"{boltz_runID}_{subtance_id}.yaml")
+                yaml_dest = os.path.join(yaml_dir, f"{boltz_runID}_{substance_id}.yaml")
                 shutil.copy(yaml_file, yaml_dest)
-                if VERBOSE: print(f"Copied {subtance_id}.yaml for {boltz_runID}")
+                if VERBOSE: print(f"Copied {substance_id}.yaml for {boltz_runID}")
+            
+            # Copy hparams.yaml only once (from first successful prediction)
+            if not hparams_copied:
+                # Extract boltz_results directory path
+                boltz_results_dir = cif_file.split('/predictions/')[0]
+                hparams_path = os.path.join(boltz_results_dir, 'lightning_logs', 'version_0', 'hparams.yaml')
+                
+                if os.path.exists(hparams_path):
+                    hparams_dest = os.path.join(output_dir, 'hparams.yaml')
+                    shutil.copy(hparams_path, hparams_dest)
+                    if VERBOSE: print(f"Copied hparams.yaml to {output_dir}")
+                    hparams_copied = True
         else:
-            print(f"[WARNING] No .cif file found for {subtance_id}")
+            print(f"[WARNING] No .cif file found for {substance_id}")
+    
+    if not hparams_copied:
+        print("[WARNING] Could not find hparams.yaml in any boltz_results directory")
     
     if VERBOSE: print(f"Files copied to {output_dir}")
 
@@ -250,3 +258,35 @@ def remove_pkls(boltz_cache, run_cache_prot, VERBOSE):
             os.remove(pkl_file)
     
     if VERBOSE: print(f"Deleted all generated pkls.")
+
+
+def get_protein_stats(pred_df, protein=None):
+    """
+    Get statistics about predictions for each protein.
+    Useful for monitoring progress across different proteins.
+    
+    Args:
+        pred_df: predictions DataFrame (long format with 'protein' column)
+        protein: specific protein to analyze (None = all proteins)
+    
+    Returns:
+        DataFrame with stats per protein
+    """
+    if 'protein' not in pred_df.columns:
+        print("Warning: 'protein' column not found. Cannot generate protein stats.")
+        return None
+    
+    if protein:
+        pred_df = pred_df[pred_df['protein'] == protein]
+    
+    stats = pred_df.groupby('protein').agg({
+        'substance_id': 'count',  # Total rows
+        'pred_log10ic50': lambda x: x.notna().sum(),  # Non-null predictions
+        'boltz_runID': 'nunique'  # Unique runs
+    }).rename(columns={
+        'substance_id': 'total_rows',
+        'pred_log10ic50': 'valid_predictions',
+        'boltz_runID': 'unique_runs'
+    })
+    
+    return stats

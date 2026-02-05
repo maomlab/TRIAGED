@@ -71,7 +71,7 @@ def main(args):
     cdd_api_key, vault_id, readout_query, mol_query,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
     VERBOSE, output_dir) = read_json_args(args.json_file)
-
+    import ipdb; ipdb.set_trace()
     missing = []
     params = {
         'pdb': pdb, 
