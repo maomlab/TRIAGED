@@ -4,7 +4,8 @@ import pandas as pd
 import os 
 import glob     
 import shutil
-from BoltzCov.analysis import analysis_utils
+import json
+import math 
 
 def fetch_new(pred_df, metadata_df, protein, min_replicates=3):
     '''
@@ -86,12 +87,81 @@ def get_identifier(pkl_id, boltz_cache_prot, record_path):
 
     return substance_id, inchi_key, vault_mol_id
 
+def convert_IC_to_energy(IC):
+    """
+    Convert log10(IC50) measured in uM to kcal/mol.
+    :param IC: IC50.
+    :return: converted kcal/mol estimate.
+    """
+    return (6 - IC) * 1.364
+
+def read_boltz_predictions(predictions_dir):
+    """
+    Reads prediction JSON files from subdirectories and compiles them into a pandas DataFrame.
+    :param predictions_dir: Path to the directory containing subdirectories with JSON files.
+    :return: Pandas DataFrame with compiled data.
+    """
+    data = []
+    list_compound_dirs = [d.name for d in os.scandir(predictions_dir) if d.is_dir()]
+    for compound_name in list_compound_dirs:
+        compound_id = compound_name.split('_')[-1]
+        compound_dir = os.path.join(predictions_dir, compound_name)
+        results = [compound_dir,  f"boltz_results_{compound_id}", "predictions", f"{compound_id}"]
+        compound_result =  "/".join(results)
+        if not os.path.isdir(compound_result):
+            continue
+
+        affinity_file = os.path.join(compound_result, f"affinity_{compound_id}.json")
+        confidence_file = os.path.join(compound_result, f"confidence_{compound_id}_model_0.json")
+
+        if os.path.exists(affinity_file) and os.path.exists(confidence_file):
+            with open(affinity_file, 'r') as af:
+                affinity_data = json.load(af)
+                affinity_pred_value = affinity_data.get("affinity_pred_value", None)
+                ic50_nm = (10 ** affinity_pred_value) * 1000 
+                pred_pic50 = -math.log10((10 ** affinity_pred_value) * 1e-6)
+                affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
+
+            with open(confidence_file, 'r') as cf:
+                confidence_data = json.load(cf)
+                confidence_score = confidence_data.get("confidence_score", None)
+                ptm = confidence_data.get("ptm", None)
+                iptm = confidence_data.get("iptm", None)
+                ligand_iptm = confidence_data.get("ligand_iptm", None)
+                protein_iptm = confidence_data.get("protein_iptm", None)
+                complex_plddt = confidence_data.get("complex_plddt", None)
+                complex_iplddt = confidence_data.get("complex_iplddt", None)
+                complex_pde = confidence_data.get("complex_pde", None)
+                complex_ipde = confidence_data.get("complex_ipde", None)
+
+            energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
+
+            data.append({
+                "compound_id": compound_id,
+                "Pred log10(IC50)": affinity_pred_value,
+                "Pred pIC50": pred_pic50,
+                "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,
+                "Binding Probability": affinity_probability_binary,
+                "Pred Label":  True if affinity_probability_binary > 0.5 else False,
+                "Confidence Score": confidence_score,
+                "kcal/mol": energy_value,
+                "PTM": ptm,
+                "IPTM": iptm,
+                "Ligand IPTM": ligand_iptm,
+                "Protein IPTM": protein_iptm,
+                "Complex pLDDT": complex_plddt,
+                "Complex iPLDDT": complex_iplddt,
+                "Complex PDE": complex_pde,
+                "Complex iPDE": complex_ipde
+            })
+    return pd.DataFrame(data)
+
 def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name):
     ''' 
     Update predictions in predictions.csv. Each run creates a unique row (no averaging).
     Now saves data in long format with a 'protein' column.
     '''
-    boltz_preds = analysis_utils.read_boltz_predictions(predictions_dir=boltz_cache_prot, reps=False)
+    boltz_preds = read_boltz_predictions(predictions_dir=boltz_cache_prot, reps=False)
     
     new_pred = boltz_preds[boltz_preds['compound_id'] == pkl_id]
     if new_pred.empty:

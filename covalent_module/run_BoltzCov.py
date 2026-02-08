@@ -1,3 +1,93 @@
+'''
+Boltz Covalent Docking Pipeline - Main Workflow Script
+
+This script orchestrates the complete workflow for covalent docking using Boltz-2, 
+integrating with CDD Vault for compound management and experimental data tracking.
+
+Workflow Overview:
+-----------------
+1. Query CDD Vault for ligands and experimental readouts
+2. Update or create local compound records (metadata.csv, experiment_readouts.csv)
+3. Identify compounds that need docking (exclude previously attempted)
+4. Submit Boltz-2 covalent docking jobs via SLURM
+5. Monitor job completion
+6. Extract predictions and confidence metrics from Boltz outputs
+7. Reorganize predictions and structure files into organized output directory
+8. Update predictions.csv with new results
+9. Track failed compounds in errored.csv
+10. Clean up temporary files
+
+Key Features:
+------------
+- CDD Vault integration for compound and assay data management
+- Incremental docking: only docks new compounds not in predictions.csv
+- Error tracking: maintains errored.csv to avoid re-attempting failed compounds
+- SLURM job submission and monitoring
+- Automatic reorganization of outputs into replicate directories
+- Preserves all CIF structures and confidence metrics
+
+Input Requirements:
+------------------
+- JSON configuration file with all parameters
+- PDB structure file with target protein
+- CDD Vault API credentials and query specifications
+- SLURM template for job submission
+- Boltz-2 model weights (downloaded automatically if missing)
+
+Output Structure:
+----------------
+<OUTPUT_DIR>/
+├── <replicate_1>/
+│   ├── PROT_LIG_model_0.cif
+│   └── hparams.yaml
+├── <replicate_2>/
+│   └── ...
+└── records/
+    ├── metadata.csv               # Compound metadata from CDD
+    ├── experiment_readouts.csv    # Experimental IC50/readout data
+    ├── predictions.csv            # Boltz prediction metrics (compiled)
+    └── errored.csv               # Failed compounds (to skip on retry)
+
+JSON Configuration Format:
+-------------------------
+{
+    "RECORD_PATH": "/path/to/records",
+    "CDD_API_KEY": "your_api_key",
+    "VAULT_ID": 12345,
+    "READOUT_QUERY": {"protocol_ids": [123], "runs": [456]},
+    "MOL_QUERY": {"molecule_ids": [789]},
+    "PDB": "/path/to/protein.pdb",
+    "RES_IDX": 145,
+    "LIGAND_CHAIN": "X",
+    "MSA_PATH": "/path/to/msa/dir",
+    "RUN_CACHE": "/path/to/temp/cache",
+    "BOLTZ_CACHE": "/path/to/boltz/weights",
+    "SLURM_TEMPLATE": "/path/to/slurm_template.sh",
+    "VERBOSE": true,
+    "OUTPUT": "/path/to/output"
+}
+
+Usage:
+------
+    python main.py --json_file config.json
+
+Dependencies:
+------------
+- BoltzCov package (update_ligands, run_boltz modules)
+- pandas, json, shutil, time, argparse, os
+- CDD Vault API access
+- SLURM cluster environment
+- Boltz-2 model weights
+
+Notes:
+-----
+- run_cache is deleted and recreated on each run (5 second warning)
+- Boltz weights are downloaded automatically to boltz_cache if missing
+- predictions.csv is incrementally updated (preserves previous results)
+- Failed docking attempts are logged to errored.csv to avoid retries
+
+Authors: Manasa Yadavalli
+'''
 import os
 import pandas as pd
 import json 
@@ -59,12 +149,6 @@ def main(args):
     3) Docks ligands that we did not dock previously 
     4) Reorginizes outputs 
     5) Updates relavant results in compound records
-    Future features:
-    6) takes either cdd api or ligand csv 
-    7) pulls replicate readouts as well 
-    8) Produces analysis plots 
-    9) Computes interaction fingerprints and interactions 
-    10) Produces visualizations
     '''
     # loading input arguments from user 
     (record_path,
