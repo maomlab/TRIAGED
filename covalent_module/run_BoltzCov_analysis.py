@@ -64,8 +64,7 @@ def validate_config(config):
     if 'CIF_DIR' in config and not os.path.isdir(config['CIF_DIR']):
         raise FileNotFoundError(f"Not found: {config['CIF_DIR']}")
 
-
-def average_replicates(df_predictions):
+def average_replicates(df_predictions, protein_name):
     """Average replicate predictions per compound per protein."""
     
     score_cols = [
@@ -83,6 +82,9 @@ def average_replicates(df_predictions):
         'complex_ipde'
     ]
     
+    # Metadata columns to keep (take first value from group)
+    metadata_cols = ['inchi_key', 'vault_mol_id', 'boltz_runID']
+    
     cols_to_average = [c for c in score_cols if c in df_predictions.columns]
     group_cols = ['substance_id', 'protein']
 
@@ -97,10 +99,18 @@ def average_replicates(df_predictions):
         f"{n_reps.mean():.1f} reps/pair"
     )
 
+    # Build aggregation dictionary
+    agg_dict = {c: ['mean', 'std'] for c in cols_to_average}
+    
+    # Add metadata columns (take first value)
+    for col in metadata_cols:
+        if col in df_predictions.columns:
+            agg_dict[col] = 'first'
+
     df_averaged = (
         df_predictions
-        .groupby(group_cols)[cols_to_average]
-        .agg(['mean', 'std'])
+        .groupby(group_cols)[list(agg_dict.keys())]
+        .agg(agg_dict)
         .reset_index()
     )
 
@@ -115,11 +125,20 @@ def average_replicates(df_predictions):
         columns={f'{c}_mean': c for c in cols_to_average},
         inplace=True
     )
+    df_averaged.rename(
+        columns={c: f'{protein_name}_{c}' for c in cols_to_average},
+        inplace=True
+    )
+
+    # Drop columns ending in _mean or _std that don't have protein_name prefix
+    cols_to_drop = [c for c in df_averaged.columns 
+                    if (c.endswith('_mean') or c.endswith('_std')) 
+                    and not c.startswith(protein_name)]
+    df_averaged.drop(columns=cols_to_drop, inplace=True)
 
     df_averaged['n_replicates'] = df_averaged.set_index(group_cols).index.map(n_reps)
 
     return df_averaged
-
 
 def merge_with_experimental(df_predictions, df_experimental, exp_col):
     """Merge predictions with experimental data and label actives/inactives."""
@@ -148,7 +167,7 @@ def merge_with_experimental(df_predictions, df_experimental, exp_col):
 
 def compute_metrics_and_plots(df_merged, score_col, exp_col, topN, run_name, output_dir):
     """Compute metrics and generate plots."""
-    
+
     print("Computing metrics...")
     metrics, curves = calculate_metrics(
         topN=topN,
@@ -231,7 +250,7 @@ def run_plip_analysis(cif_dir, output_dir, protein_name, receptor_type='protein'
         directory=cif_dir,
         outdir=fp_dir,
         receptor_type=receptor_type,
-        verbose=True,
+        verbose=False,
         csv_name="interaction_fingerprints",
         selection_method='first', 
         protein_name=protein_name
@@ -299,7 +318,7 @@ def main():
     print("Loading predictions...")
     df_predictions = pd.read_csv(predictions_csv)
     
-    df_averaged = average_replicates(df_predictions)
+    df_averaged = average_replicates(df_predictions, protein_name)
     df_predictions = df_predictions.dropna(subset=[score_col])
 
     print("\nLoading experimental data...")
@@ -310,10 +329,10 @@ def main():
         raise KeyError(f"IC50 column not found. Available: {list(df_experimental.columns)}")
     
     df_experimental = df_experimental.dropna(subset=[exp_col])
-
     df_merged = merge_with_experimental(df_averaged, df_experimental, exp_col)
     
     print("\n" + "=" * 80)
+    score_col = f"{protein_name}_{score_col}"
     metrics, _ = compute_metrics_and_plots(
         df_merged, score_col, exp_col, topN, run_name, run_output_dir
     )

@@ -27,15 +27,17 @@ def process_invitro(invitro_df, exp_col, threshold=1000):
         print(f"Warning: {num_nans} NaN values in '{exp_col}'")
     
     # Convert log10(IC50 in µM) to IC50 in nM
-    invitro_df[f"{exp_col}_nM"] = invitro_df[exp_col].apply(lambda x: (10 ** x) * 1000)
+    exp_col_nM = '_'.join(['exp', exp_col.split('_')[1], 'ic50 (nM)'])
+    invitro_df[exp_col_nM] = invitro_df[exp_col].apply(lambda x: (10 ** x) * 1000)
     
     # Convert log10(IC50 in µM) to pIC50 (M scale)
     invitro_df["pIC50"] = 6 - invitro_df[exp_col]
     
     # Label actives: IC50 < threshold (in nM)
-    invitro_df["is_binder"] = invitro_df[f"{exp_col}_nM"] < threshold
+    invitro_df["is_binder"] = invitro_df[exp_col_nM] < threshold
     invitro_df.replace(["nan", "NaN"], np.nan, inplace=True) 
-
+    invitro_df = invitro_df.drop(columns=exp_col_nM)
+    
     return invitro_df
 
 def enrichment_factor(df_truth_pred, score_col, topN):
@@ -49,7 +51,7 @@ def enrichment_factor(df_truth_pred, score_col, topN):
 
     :return: List of Enrichment Factors for all Boltz prediction replicates given. 
     '''
-    if score_col == 'pred_log10ic50':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True) # best on top. most negative ic50 on top
     else: 
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
@@ -141,7 +143,7 @@ def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
 
 def bedroc_calc(df_truth_pred, score_col, alpha=20):
     
-    if score_col == 'pred_log10ic50':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True)
     else:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
@@ -176,7 +178,7 @@ def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.001):
     RANDOM_LOGAUC = 0.5  # This is correct for log space
     
     # Sort by scores
-    if score_col == 'pred_log10ic50':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True)
     else:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False)
@@ -245,7 +247,7 @@ def calculate_metrics(df_truth_pred, score_col, topN):
     '''
     Computes performance metrics and curve data for a given score column.
     '''
-    if score_col == 'pred_log10ic50':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True)
         y_scores = -df_sorted[score_col].values 
     else:
@@ -342,7 +344,7 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             df_sorted = curves['logauc'].copy()
             score_col = metrics['Score Used']
             
-            if score_col == 'pred_log10ic50':
+            if 'log' in score_col:
                 df_sorted = df_sorted.sort_values(by=score_col, ascending=True)
             else:
                 df_sorted = df_sorted.sort_values(by=score_col, ascending=False)
