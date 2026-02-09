@@ -64,7 +64,7 @@ def validate_config(config):
     if 'CIF_DIR' in config and not os.path.isdir(config['CIF_DIR']):
         raise FileNotFoundError(f"Not found: {config['CIF_DIR']}")
 
-def average_replicates(df_predictions, protein_name):
+def average_replicates(df_predictions):
     """Average replicate predictions per compound per protein."""
     
     score_cols = [
@@ -332,7 +332,7 @@ def main():
     df_merged = merge_with_experimental(df_averaged, df_experimental, exp_col)
     
     print("\n" + "=" * 80)
-    score_col = f"{protein_name}_{score_col}"
+   
     metrics, _ = compute_metrics_and_plots(
         df_merged, score_col, exp_col, topN, run_name, run_output_dir
     )
