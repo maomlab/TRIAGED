@@ -125,16 +125,6 @@ def average_replicates(df_predictions):
         columns={f'{c}_mean': c for c in cols_to_average},
         inplace=True
     )
-    df_averaged.rename(
-        columns={c: f'{protein_name}_{c}' for c in cols_to_average},
-        inplace=True
-    )
-
-    # Drop columns ending in _mean or _std that don't have protein_name prefix
-    cols_to_drop = [c for c in df_averaged.columns 
-                    if (c.endswith('_mean') or c.endswith('_std')) 
-                    and not c.startswith(protein_name)]
-    df_averaged.drop(columns=cols_to_drop, inplace=True)
 
     df_averaged['n_replicates'] = df_averaged.set_index(group_cols).index.map(n_reps)
 
