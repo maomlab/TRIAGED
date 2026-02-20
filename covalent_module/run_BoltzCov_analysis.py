@@ -2,9 +2,8 @@
 Simple Boltz Analysis - 3 Input Script
 
 Inputs:
-1. experimental.csv - Experimental readouts  
-2. predictions.csv - Boltz predictions
-3. CIF directory - Structure files
+1. RECORDS directory - Contains experimental_readouts.csv and predictions.csv
+2. CIF directory - Structure files
 
 Outputs: metrics, plots, PLIP fingerprints
 
@@ -12,8 +11,7 @@ Usage: python simple_analysis.py --json_file config.json
 
 JSON format:
 {
-    "EXPERIMENTAL_CSV": "experimental.csv",
-    "PREDICTIONS_CSV": "predictions.csv", 
+    "RECORDS": "/path/to/records_dir",
     "CIF_DIR": "main_preds",
     "OUTPUT_DIR": "results",
     "PROTEIN_NAME": "tgcpl",
@@ -23,7 +21,6 @@ JSON format:
 """
 
 import os
-import sys
 import json
 import argparse
 import pandas as pd
@@ -51,16 +48,23 @@ def read_json_config(json_file):
 
 
 def validate_config(config):
-    required = ['EXPERIMENTAL_CSV', 'PREDICTIONS_CSV', 'OUTPUT_DIR']
+    required = ['RECORDS', 'OUTPUT_DIR']
     missing = [k for k in required if k not in config]
     
     if missing:
         raise ValueError(f"Missing: {', '.join(missing)}")
     
-    if not os.path.exists(config['EXPERIMENTAL_CSV']):
-        raise FileNotFoundError(f"Not found: {config['EXPERIMENTAL_CSV']}")
-    if not os.path.exists(config['PREDICTIONS_CSV']):
-        raise FileNotFoundError(f"Not found: {config['PREDICTIONS_CSV']}")
+    records_dir = config['RECORDS']
+    if not os.path.isdir(records_dir):
+        raise FileNotFoundError(f"Records directory not found: {records_dir}")
+    
+    experimental_csv = os.path.join(records_dir, 'experimental_readouts.csv')
+    predictions_csv = os.path.join(records_dir, 'predictions.csv')
+    
+    if not os.path.exists(experimental_csv):
+        raise FileNotFoundError(f"Not found: {experimental_csv}")
+    if not os.path.exists(predictions_csv):
+        raise FileNotFoundError(f"Not found: {predictions_csv}")
     if 'CIF_DIR' in config and not os.path.isdir(config['CIF_DIR']):
         raise FileNotFoundError(f"Not found: {config['CIF_DIR']}")
 
@@ -82,7 +86,6 @@ def average_replicates(df_predictions):
         'complex_ipde'
     ]
     
-    # Metadata columns to keep (take first value from group)
     metadata_cols = ['inchi_key', 'vault_mol_id', 'boltz_runID']
     
     cols_to_average = [c for c in score_cols if c in df_predictions.columns]
@@ -91,7 +94,6 @@ def average_replicates(df_predictions):
     if not cols_to_average:
         return df_predictions
 
-    # count replicates per compound–protein pair
     n_reps = df_predictions.groupby(group_cols).size()
 
     print(
@@ -99,10 +101,8 @@ def average_replicates(df_predictions):
         f"{n_reps.mean():.1f} reps/pair"
     )
 
-    # Build aggregation dictionary
     agg_dict = {c: ['mean', 'std'] for c in cols_to_average}
     
-    # Add metadata columns (take first value)
     for col in metadata_cols:
         if col in df_predictions.columns:
             agg_dict[col] = 'first'
@@ -114,13 +114,11 @@ def average_replicates(df_predictions):
         .reset_index()
     )
 
-    # flatten MultiIndex columns
     df_averaged.columns = [
         f'{col}_{stat}' if stat else col
         for col, stat in df_averaged.columns
     ]
 
-    # rename mean columns back to original names
     df_averaged.rename(
         columns={f'{c}_mean': c for c in cols_to_average},
         inplace=True
@@ -185,7 +183,6 @@ def compute_metrics_and_plots(df_merged, score_col, exp_col, topN, run_name, out
                 'scatter': scatter_dict
             }
         }
-        # save base scatter
         scatter_fig = list(scatter_dict.keys())[0]
         scatter_fig.savefig(
             os.path.join(plots_dir, 'scatter.png'),
@@ -193,7 +190,6 @@ def compute_metrics_and_plots(df_merged, score_col, exp_col, topN, run_name, out
             bbox_inches='tight'
         )
 
-        # Top-N affinity scatter overlay
         topN_affinity_scatter(
             truth_pred_df=df_merged,
             analysis_dict=analysis_dict,
@@ -285,8 +281,9 @@ def main():
     config = read_json_config(args.json_file)
     validate_config(config)
     
-    experimental_csv = config['EXPERIMENTAL_CSV']
-    predictions_csv = config['PREDICTIONS_CSV']
+    records_dir = config['RECORDS']
+    experimental_csv = os.path.join(records_dir, 'experimental_readouts.csv')
+    predictions_csv = os.path.join(records_dir, 'predictions.csv')
     cif_dir = config.get('CIF_DIR')
     output_dir = config['OUTPUT_DIR']
     
@@ -302,6 +299,7 @@ def main():
     print("Boltz Analysis")
     print("=" * 80)
     print(f"Run: {run_name}")
+    print(f"Records: {records_dir}")
     print(f"Score: {score_col}")
     print(f"Output: {run_output_dir}\n")
     

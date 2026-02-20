@@ -155,7 +155,7 @@ def main(args):
     cdd_api_key, vault_id, readout_query, mol_query,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
     VERBOSE, output_dir) = read_json_args(args.json_file)
-    import ipdb; ipdb.set_trace()
+
     missing = []
     params = {
         'pdb': pdb, 
@@ -196,7 +196,7 @@ def main(args):
     print("1. Pulling ligands from CDD vault using the following queries:\n"
       f"Readout query: {readout_query}\n"
       f"Molecule query: {mol_query}")
-            
+    
     readouts, molecules = pull_cdd_ligs.cdd_query(API_KEY=cdd_api_key, 
                                     VAULT_ID=vault_id,  # Use vault_id variable
                                     readout_query=readout_query, 

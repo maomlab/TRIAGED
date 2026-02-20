@@ -60,12 +60,14 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
             export_url = f"https://app.collaborativedrug.com/api/v1/vaults/{VAULT_ID}/exports/{export_id}"
             max_attempts = 120
             attempt = 0
-            
+            time.sleep(3)  # wait before first poll
             while attempt < max_attempts:
                 time.sleep(5)
                 attempt += 1
                 
                 response = requests.get(export_url, headers=headers)
+                if response.status_code == 403:
+                    continue
                 response.raise_for_status()
                 data = response.json()
                 
@@ -75,8 +77,10 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
                 status = data.get("status")
                 
                 if status == "finished":
-                    return data
+                    response = requests.get(export_url, headers=headers)
+                    return response.json()
                 elif status in ["new", "started", "pending", None]:
+                    print(f"Attempt {attempt}: status={status}")
                     continue
                 elif status == "failed":
                     raise Exception(f"Export failed: {data.get('error', 'Unknown')}")
@@ -168,7 +172,8 @@ def get_ic50s(readouts, molecules):
         tgcpl_log_ic50 = None
         hscpl_log_ic50 = None
         for r in readouts['objects']: 
-            if r['molecule'] == str(molecule_id) or r['molecule'] == int(molecule_id): 
+            if str(r['molecule']) == str(molecule_id):
+                print(f"Molecule {molecule_id} readout keys: {list(r['readouts'].keys())}")
                 for key, val in r['readouts'].items():
                     # print(molecule_id, key, val['value'])
                     if str(key) == "1125023":
