@@ -1,6 +1,6 @@
 '''
 Boltz Covalent Docking Pipeline - Main Workflow Script
-
+Env: cdd_pkl
 This script orchestrates the complete workflow for covalent docking using Boltz-2, 
 integrating with CDD Vault for compound management and experimental data tracking.
 
@@ -115,6 +115,7 @@ def read_json_args(json_file):
         vault_id = run_arguments.get("VAULT_ID", None) # number of the vault in CDD 
         readout_query = run_arguments.get("READOUT_QUERY", None) # is a dict 
         mol_query = run_arguments.get("MOL_QUERY", None) # is a dict 
+        syn_include = run_arguments.get("SYN_INCLUDE", None)
         
         pdb = run_arguments.get("PDB")
         pdb = os.path.expandvars(pdb) if pdb else None 
@@ -132,12 +133,12 @@ def read_json_args(json_file):
         VERBOSE = run_arguments.get("VERBOSE", False)
         output_dir = run_arguments.get("OUTPUT", None) # include protein name if you want it to be stored in a seperate protein directory 
         output_dir = os.path.expandvars(output_dir) if output_dir else None 
-    
+        COVALENT = run_arguments.get("COVALENT", False)
     return (
     record_path,
-    cdd_api_key, vault_id, readout_query, mol_query,
+    cdd_api_key, vault_id, readout_query, mol_query, syn_include,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
-    VERBOSE, output_dir
+    VERBOSE, output_dir, COVALENT
     )
 
 def main(args):
@@ -152,28 +153,46 @@ def main(args):
     '''
     # loading input arguments from user 
     (record_path,
-    cdd_api_key, vault_id, readout_query, mol_query,
+    cdd_api_key, vault_id, readout_query, mol_query,syn_include,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
-    VERBOSE, output_dir) = read_json_args(args.json_file)
+    VERBOSE, output_dir, COVALENT) = read_json_args(args.json_file)
 
-    missing = []
-    params = {
-        'pdb': pdb, 
-        'res_idx': res_idx, 
-        'ligand_chain': ligand_chain, 
-        'slurm_template': slurm_template,
-        'cdd_api_key': cdd_api_key, 
-        'vault_id': vault_id, 
-        'readout_query': readout_query, 
-        'mol_query': mol_query, 
-        'boltz_cache': boltz_cache, 
-        'run_cache':run_cache,
-        'output_dir': output_dir
-    }
+    if COVALENT:
+        missing = []
+        cov_params = {
+            'pdb': pdb, 
+            'res_idx': res_idx, 
+            'ligand_chain': ligand_chain, 
+            'slurm_template': slurm_template,
+            'cdd_api_key': cdd_api_key, 
+            'vault_id': vault_id, 
+            'readout_query': readout_query, 
+            'mol_query': mol_query, 
+            'boltz_cache': boltz_cache, 
+            'run_cache':run_cache,
+            'output_dir': output_dir
+        }
 
-    for name, value in params.items():
-        if value is None:
-            missing.append(name)
+        for name, value in cov_params.items():
+            if value is None:
+                missing.append(name)
+    else:
+        missing = []
+        params = {
+            'pdb': pdb, 
+            'slurm_template': slurm_template,
+            'cdd_api_key': cdd_api_key, 
+            'vault_id': vault_id, 
+            'readout_query': readout_query, 
+            'mol_query': mol_query, 
+            'boltz_cache': boltz_cache, 
+            'run_cache':run_cache,
+            'output_dir': output_dir
+        }
+
+        for name, value in params.items():
+            if value is None:
+                missing.append(name)
 
     if missing:
         raise ValueError(f"Missing required arguments: {', '.join(missing)}")
@@ -206,7 +225,7 @@ def main(args):
     old_meta = os.path.join(record_path, 'metadata.csv') 
     old_exp = os.path.join(record_path, 'experiment_readouts.csv')
 
-    new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(readouts, molecules)
+    new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(readouts, molecules, syn_include=syn_include)
     if record_path is None: 
         if VERBOSE: print("Writing new records (metadata.csv, and experimental_readouts.csv) in output directory since None path provided by User.")
         # make record dir in output if dir dne 
@@ -240,8 +259,12 @@ def main(args):
     
     # obtain list of ligands that need to be docked 
     protein_name = os.path.splitext(os.path.basename(pdb))[0]
-    print("3. Checking existing predictions and performing Docking with Boltz-2 Covalent.")
-    pred_rec = os.path.join(record_path, 'predictions.csv')
+    if COVALENT: 
+        print("3. Checking existing predictions and performing Docking with Boltz-2 Covalent.")
+        pred_rec = os.path.join(record_path, 'predictions.csv')
+    else: 
+        print("3. Checking existing predictions and performing Docking with Boltz-2 Non-Covalent.")
+        pred_rec = os.path.join(record_path, 'noncov_predictions.csv') 
     metadata_df = pd.read_csv(old_meta)
     
     # exclude previous ligands that had a docking attempt 
@@ -260,12 +283,15 @@ def main(args):
         dock_compounds = metadata_df[['substance_id', 'inchi_key', 'smiles']]
     
     if VERBOSE: print(f"Docking {len(dock_compounds)} compounds.")
-
     # submit jobs: run boltz    
     from BoltzCov.run_boltz import submit_job
-    final_status = submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, run_cache=run_cache,
-                    res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
-                    slurm_template=slurm_template, msa_path=msa_path)
+    if COVALENT:
+        final_status = submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, run_cache=run_cache,
+                        res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
+                        slurm_template=slurm_template, msa_path=msa_path)
+    else:
+        final_status = submit_job.run_boltz_noncov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, 
+                        run_cache=run_cache, VERBOSE=VERBOSE, slurm_template=slurm_template, msa_path=msa_path)
     # check when done 
     if final_status == "COMPLETED":
         print("Jobs completed!")
@@ -278,11 +304,11 @@ def main(args):
     update_predictions.check_pred(run_cache_prot=run_cache_prot, record_path=record_path, VERBOSE=VERBOSE, protein_name=protein_name)
 
     # reorg predictions and delete run_cache dir after moving cif+yamls
-    update_predictions.reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE)
+    update_predictions.reorg_preds(run_cache_prot, pred_df, output_dir, VERBOSE)
     if VERBOSE: print(f"Please find final predictions in {output_dir}")
 
     #shutil.rmtree() only remove the pkls that were just added 
-    update_predictions.remove_pkls(boltz_cache, run_cache_prot, VERBOSE)
+    if COVALENT: update_predictions.remove_pkls(boltz_cache, run_cache_prot, VERBOSE)
 
     run_cache = os.path.dirname(run_cache_prot)
     if VERBOSE: print(f"Deleting {run_cache} directory...")
