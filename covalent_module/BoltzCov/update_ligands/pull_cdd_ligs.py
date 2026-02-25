@@ -98,7 +98,7 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
     
     return readouts, molecules
 
-def get_ic50s(readouts, molecules):
+def get_ic50s(readouts, molecules, syn_include=None):
     '''
     Loads MEAN ic50 values for both TgCPL and HsCPL.
     Uses two DataFrames where 'molecule' from readouts matches in 'id' in molecules and
@@ -119,7 +119,9 @@ def get_ic50s(readouts, molecules):
         smiles = row['smiles']
         syn = row["synonyms"]
         syn_str = (',').join(syn)
-
+        
+        if syn_include is not None and syn_include not in syn_str:
+            continue
         # Start with basic metadata
         metadata_entry = {    
             "vault_mol_id": molecule_id,

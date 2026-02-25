@@ -16,7 +16,7 @@ def validate_file(filename):
     else:
         return ext
 
-def process_protein(prot_file, idx, lig_chain):
+def process_protein(prot_file, idx, lig_chain='A'):
     '''Returns protein information.'''
     ext = validate_file(prot_file)
     if ext==".pdb":
@@ -25,22 +25,25 @@ def process_protein(prot_file, idx, lig_chain):
         with open(prot_file, 'r') as f:
             content = f.read()
             sequence = "".join(content.split())
-    idx = int(idx)
-    if idx < 1:
-        idx = 0
-    elif idx > len(sequence):
-        raise ValueError(f"[ERROR] res_idx {idx} exceeds sequence length {len(sequence)}.")
+    if idx and lig_chain:
+        idx = int(idx)
+        if idx < 1:
+            idx = 0
+        elif idx > len(sequence):
+            raise ValueError(f"[ERROR] res_idx {idx} exceeds sequence length {len(sequence)}.")
+        else:
+            res_aa = sequence[idx-1]
+
+        res_name = pdb_to_fasta.residue_to_three_letter(res_aa)
+
+        if covalent_utils.verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
+            raise ValueError(f"[ERROR] res_idx {idx} does NOT map to a covalent residue. " \
+            "Please verify res_idx matches expected residue in sequence.")
+        
+        res_atom = covalent_utils.residue_cov_atom(res_name)
     else:
-        res_aa = sequence[idx-1]
-
-    res_name = pdb_to_fasta.residue_to_three_letter(res_aa)
-
-    if covalent_utils.verify_covalent(res_name) != True: # verifies if this residue can participate in a covalent bond w the
-        raise ValueError(f"[ERROR] res_idx {idx} does NOT map to a covalent residue. " \
-        "Please verify res_idx matches expected residue in sequence.")
-    
-    res_atom = covalent_utils.residue_cov_atom(res_name)
-
+        res_name = None
+        res_atom = None
     return sequence, res_name, res_atom
 
 def unique_ccd(ccd_db, len=5, max_attempts=1000):

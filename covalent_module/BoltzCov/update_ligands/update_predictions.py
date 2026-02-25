@@ -161,7 +161,7 @@ def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name):
     Update predictions in predictions.csv. Each run creates a unique row (no averaging).
     Now saves data in long format with a 'protein' column.
     '''
-    boltz_preds = read_boltz_predictions(predictions_dir=boltz_cache_prot, reps=False)
+    boltz_preds = read_boltz_predictions(predictions_dir=boltz_cache_prot)
     
     new_pred = boltz_preds[boltz_preds['compound_id'] == pkl_id]
     if new_pred.empty:
@@ -246,19 +246,12 @@ def check_pred(run_cache_prot, record_path, VERBOSE, protein_name):
     print("Record updates complete.")
 
 
-def reorg_preds(run_cache_prot, record_path, output_dir, VERBOSE):
+def reorg_preds(run_cache_prot, pred_df, output_dir, VERBOSE):
     '''
     Copy .cif and .yaml files to output directory for successful predictions.
     Files are renamed to boltz_runID_pklID format.
     Also copies hparams.yaml from one of the boltz_results directories to output_dir.
     '''
-    predictions_csv = os.path.join(record_path, 'predictions.csv')
-    if not os.path.exists(predictions_csv):
-        print("[ERROR] No predictions.csv found")
-        return
-    
-    pred_df = pd.read_csv(predictions_csv)
-    
     # Create output subdirectories
     cif_dir = os.path.join(output_dir, 'cifs')
     yaml_dir = os.path.join(output_dir, 'yamls')
