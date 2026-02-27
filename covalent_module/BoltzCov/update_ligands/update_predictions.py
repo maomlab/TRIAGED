@@ -265,11 +265,12 @@ def reorg_preds(run_cache_prot, pred_df, output_dir, VERBOSE):
         substance_id = row['substance_id']
         boltz_runID = row['boltz_runID']
         
-        # Find prediction files
-        pred_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*/*')
+        # Filter cif files specific to this compound
+        cif_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*/*.cif')
         
-        # Find the .cif file
-        cif_files = [f for f in pred_files if f.endswith('.cif')]
+        if not cif_files:
+            # try by substance_id if boltz_runID doesn't match directory
+            cif_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*{substance_id}*/*.cif')
         
         if cif_files:
             cif_file = cif_files[0]

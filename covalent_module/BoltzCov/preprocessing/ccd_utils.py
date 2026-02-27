@@ -283,10 +283,10 @@ def get_link_atoms(parent_file, records_csv):
 ##################################################################################
 
 WARHEAD_REACTIONS = { "nitrile": "[C:3][C:4]#[N:5]>>[C:3][13C:4]=[N:5]", 
-"alkylhalide" : "[CX4;CH,CH2:2][I,Br,Cl:3]>>[13C:2]",
-"vinyl-sulfone" : "[C:3]=[C:4][S:5](=O)=O>>[13C:3][C:4][S:5](=O)=O", # for CYS rxn; might be diff for HIS (Schneider, Grabowsky 2015)
-"acrylamide" : "[C:2]=[C:3]-C(=O)-[N:4]>>[13C:3]-[C:2]-C(=O)-[N:4]",
-"nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]"
+"nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]",
+# "alkylhalide" : "[CX4;CH,CH2:2][I,Br,Cl:3]>>[13C:2]",
+# "vinyl-sulfone" : "[C:3]=[C:4][S:5](=O)=O>>[13C:3][C:4][S:5](=O)=O", # for CYS rxn; might be diff for HIS (Schneider, Grabowsky 2015)
+# "acrylamide" : "[C:2]=[C:3]-C(=O)-[N:4]>>[13C:3]-[C:2]-C(=O)-[N:4]",
 }
 WARHEAD_REACTANTS = {name: smarts.split(">>")[0] for name, smarts in WARHEAD_REACTIONS.items()}
 compiled_reactants = {name: Chem.MolFromSmarts(smarts) for name, smarts in WARHEAD_REACTANTS.items()}

@@ -20,7 +20,7 @@ def wait_for_slurm_job(job_id, check_interval=30):
     
     while True:
         check = subprocess.run(
-            ["squeue", "-j", job_id, "-h"],
+            ["squeue", "-j", job_id, "-h", "--array"],
             capture_output=True,
             text=True
         )
