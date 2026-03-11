@@ -156,7 +156,7 @@ def read_boltz_predictions(predictions_dir):
             })
     return pd.DataFrame(data)
 
-def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name):
+def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name, VERBOSE=False):
     ''' 
     Update predictions in predictions.csv. Each run creates a unique row (no averaging).
     Now saves data in long format with a 'protein' column.
@@ -198,8 +198,12 @@ def update_preds(pkl_id, boltz_cache_prot, record_path, protein_name):
     # Append new row (no averaging, boltz_runID makes each row unique)
     if os.path.exists(predictions_csv):
         old_preds = pd.read_csv(predictions_csv)
-        updated_preds = pd.concat([old_preds, prediction_data], ignore_index=True)
-        updated_preds.to_csv(predictions_csv, index=False)
+        if not bool((old_preds['boltz_runID'] == boltz_runID).any()):
+            updated_preds = pd.concat([old_preds, prediction_data], ignore_index=True)
+            updated_preds.to_csv(predictions_csv, index=False)
+            if VERBOSE: print(f'Updated predictions for {substance_id}, {boltz_runID}')
+        else: 
+            if VERBOSE: print(f'Prediction present for {substance_id}, {boltz_runID}')
     else:
         prediction_data.to_csv(predictions_csv, index=False)
 
@@ -228,8 +232,7 @@ def check_pred(run_cache_prot, record_path, VERBOSE, protein_name):
         substance_id, inchi_key, vault_mol_id = get_identifier(pkl_id, run_cache_prot, record_path)
 
         if has_both:
-            update_preds(pkl_id, run_cache_prot, record_path, protein_name)  
-            if VERBOSE: print(f"Updated predictions for {substance_id}")
+            update_preds(pkl_id, run_cache_prot, record_path, protein_name, VERBOSE)  
         else: 
             error_data = pd.DataFrame([{
                 'substance_id': substance_id,
@@ -246,7 +249,7 @@ def check_pred(run_cache_prot, record_path, VERBOSE, protein_name):
     print("Record updates complete.")
 
 
-def reorg_preds(run_cache_prot, pred_df, output_dir, VERBOSE):
+def reorg_preds(run_cache_prot, ligand_df, output_dir, VERBOSE):
     '''
     Copy .cif and .yaml files to output directory for successful predictions.
     Files are renamed to boltz_runID_pklID format.
@@ -257,58 +260,40 @@ def reorg_preds(run_cache_prot, pred_df, output_dir, VERBOSE):
     yaml_dir = os.path.join(output_dir, 'yamls')
     os.makedirs(cif_dir, exist_ok=True)
     os.makedirs(yaml_dir, exist_ok=True)
-    
-    # Flag to track if hparams.yaml has been copied
-    hparams_copied = False
-    
-    for _, row in pred_df.iterrows():
+
+    for _, row in ligand_df.iterrows():
         substance_id = row['substance_id']
-        boltz_runID = row['boltz_runID']
+        pkl_id = row['pkl_id']
+        pred_path = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/{pkl_id}*')
+        if pred_path:
+            boltz_runID = pred_path[0].split('/')[-4]
         
         # Filter cif files specific to this compound
         cif_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*/*.cif')
-        
         if not cif_files:
             # try by substance_id if boltz_runID doesn't match directory
             cif_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*{substance_id}*/*.cif')
         
         if cif_files:
             cif_file = cif_files[0]
-            
             # Copy .cif file with new name
             cif_dest = os.path.join(cif_dir, f"{boltz_runID}_{substance_id}.cif")
             shutil.copy(cif_file, cif_dest)
-            if VERBOSE: print(f"Copied {substance_id}.cif for {boltz_runID}")
+            if VERBOSE: print(f"Copied {substance_id} cif for {boltz_runID}")
             
             # Find and copy yaml file
             # Extract parent directory: run_cache_prot/YYMMDD_HHMMSS_pklID/
             parent_dir = cif_file.split('/boltz_results_')[0]
-            
             yaml_files = glob.glob(f'{parent_dir}/*.yaml')
             if yaml_files:
                 yaml_file = yaml_files[0]
                 yaml_dest = os.path.join(yaml_dir, f"{boltz_runID}_{substance_id}.yaml")
                 shutil.copy(yaml_file, yaml_dest)
-                if VERBOSE: print(f"Copied {substance_id}.yaml for {boltz_runID}")
-            
-            # Copy hparams.yaml only once (from first successful prediction)
-            if not hparams_copied:
-                # Extract boltz_results directory path
-                boltz_results_dir = cif_file.split('/predictions/')[0]
-                hparams_path = os.path.join(boltz_results_dir, 'lightning_logs', 'version_0', 'hparams.yaml')
-                
-                if os.path.exists(hparams_path):
-                    hparams_dest = os.path.join(output_dir, 'hparams.yaml')
-                    shutil.copy(hparams_path, hparams_dest)
-                    if VERBOSE: print(f"Copied hparams.yaml to {output_dir}")
-                    hparams_copied = True
+                if VERBOSE: print(f"Copied {substance_id} yaml for {boltz_runID}")
         else:
             print(f"[WARNING] No .cif file found for {substance_id}")
-    
-    if not hparams_copied:
-        print("[WARNING] Could not find hparams.yaml in any boltz_results directory")
-    
-    if VERBOSE: print(f"Files copied to {output_dir}")
+    if VERBOSE: print(f"Files copied to {output_dir}.")
+    # TO DO : reorg based on replicates 
 
 def remove_pkls(boltz_cache, run_cache_prot, VERBOSE):
 

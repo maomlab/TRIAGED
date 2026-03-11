@@ -1,7 +1,7 @@
 '''
 Boltz Covalent Docking Pipeline - Main Workflow Script
 Env: cdd_pkl
-This script orchestrates the complete workflow for covalent docking using Boltz-2, 
+This script orchestrates the complete workflow for covalent and noncovalent docking using Boltz-2, 
 integrating with CDD Vault for compound management and experimental data tracking.
 
 Workflow Overview:
@@ -11,28 +11,10 @@ Workflow Overview:
 3. Identify compounds that need docking (exclude previously attempted)
 4. Submit Boltz-2 covalent docking jobs via SLURM
 5. Monitor job completion
-6. Extract predictions and confidence metrics from Boltz outputs
-7. Reorganize predictions and structure files into organized output directory
-8. Update predictions.csv with new results
-9. Track failed compounds in errored.csv
-10. Clean up temporary files
-
-Key Features:
-------------
-- CDD Vault integration for compound and assay data management
-- Incremental docking: only docks new compounds not in predictions.csv
-- Error tracking: maintains errored.csv to avoid re-attempting failed compounds
-- SLURM job submission and monitoring
-- Automatic reorganization of outputs into replicate directories
-- Preserves all CIF structures and confidence metrics
 
 Input Requirements:
 ------------------
-- JSON configuration file with all parameters
-- PDB structure file with target protein
-- CDD Vault API credentials and query specifications
-- SLURM template for job submission
-- Boltz-2 model weights (downloaded automatically if missing)
+- JSON configuration file with parameters
 
 Output Structure:
 ----------------
@@ -116,6 +98,7 @@ def read_json_args(json_file):
         readout_query = run_arguments.get("READOUT_QUERY", None) # is a dict 
         mol_query = run_arguments.get("MOL_QUERY", None) # is a dict 
         syn_include = run_arguments.get("SYN_INCLUDE", None)
+        syn_exclude = run_arguments.get("SYN_EXCLUDE", None)
         
         pdb = run_arguments.get("PDB")
         pdb = os.path.expandvars(pdb) if pdb else None 
@@ -136,7 +119,7 @@ def read_json_args(json_file):
         COVALENT = run_arguments.get("COVALENT", False)
     return (
     record_path,
-    cdd_api_key, vault_id, readout_query, mol_query, syn_include,
+    cdd_api_key, vault_id, readout_query, mol_query, syn_include, syn_exclude,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
     VERBOSE, output_dir, COVALENT
     )
@@ -153,7 +136,7 @@ def main(args):
     '''
     # loading input arguments from user 
     (record_path,
-    cdd_api_key, vault_id, readout_query, mol_query,syn_include,
+    cdd_api_key, vault_id, readout_query, mol_query, syn_include, syn_exclude,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
     VERBOSE, output_dir, COVALENT) = read_json_args(args.json_file)
 
@@ -225,7 +208,7 @@ def main(args):
     old_meta = os.path.join(record_path, 'metadata.csv') 
     old_exp = os.path.join(record_path, 'experiment_readouts.csv')
 
-    new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(readouts, molecules, syn_include=syn_include)
+    new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(readouts, molecules, syn_include=syn_include, syn_exclude=syn_exclude)
     if record_path is None: 
         if VERBOSE: print("Writing new records (metadata.csv, and experimental_readouts.csv) in output directory since None path provided by User.")
         # make record dir in output if dir dne 
@@ -297,22 +280,6 @@ def main(args):
         print("Jobs completed!")
     else:
         print(f"Job failed with status: {final_status}")
-    
-    # update errored.csv sheet with compounds without a .cif prediction 
-    # update predictions.csv with all preds and confidence metrics 
-    run_cache_prot = os.path.join(run_cache, protein_name) 
-    update_predictions.check_pred(run_cache_prot=run_cache_prot, record_path=record_path, VERBOSE=VERBOSE, protein_name=protein_name)
-
-    # reorg predictions and delete run_cache dir after moving cif+yamls
-    update_predictions.reorg_preds(run_cache_prot, pred_df, output_dir, VERBOSE)
-    if VERBOSE: print(f"Please find final predictions in {output_dir}")
-
-    #shutil.rmtree() only remove the pkls that were just added 
-    if COVALENT: update_predictions.remove_pkls(boltz_cache, run_cache_prot, VERBOSE)
-
-    run_cache = os.path.dirname(run_cache_prot)
-    if VERBOSE: print(f"Deleting {run_cache} directory...")
-    shutil.rmtree(run_cache)
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
