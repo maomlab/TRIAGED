@@ -1,6 +1,5 @@
 # analysis main script 
 # conda env: boltz_analysis_env 
-# Adapted from Miguel Limcaoco 
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np

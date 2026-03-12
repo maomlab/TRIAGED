@@ -116,11 +116,21 @@ def main(args):
 
     # Step 1: Update errored.csv and predictions CSV with results from run_cache
     print(f"1. Checking predictions and updating records in {record_path}...")
+
+    if not COVALENT:
+        # make temp ligand_csv 
+        lig_dirs = os.listdir(run_cache_prot)
+        lig_dirs = [d for d in os.listdir(run_cache_prot) if d[0].isdigit()]
+        substance_ids = [lig.split('_')[-1] for lig in lig_dirs if os.path.isdir(os.path.join(run_cache_prot, lig))]
+        ligand_noncov_df = pd.DataFrame({'pkl_id': substance_ids})
+        ligand_noncov_df.to_csv(f'{run_cache_prot}/noncov_ligands.csv', index=False)
+
     update_predictions.check_pred(
         run_cache_prot=run_cache_prot,
         record_path=record_path,
         VERBOSE=VERBOSE,
-        protein_name=protein_name
+        protein_name=protein_name,
+        COVALENT=COVALENT
     )
 
     # Step 2: Load updated predictions and filter to current protein
@@ -128,9 +138,6 @@ def main(args):
         raise FileNotFoundError(
             f"Predictions CSV not found after check_pred: {pred_csv}"
         )
-
-    # pred_df = pd.read_csv(pred_csv)
-    # pred_df = pred_df[pred_df['protein'] == protein_name]
 
     csv_files = glob.glob(os.path.join(run_cache_prot, '*.csv'))
     if csv_files: ligand_cache_csv = csv_files[0] # temp csv that was generated before boltz run to make yamls 
@@ -140,19 +147,29 @@ def main(args):
         print(f"   Found {len(ligand_csv_df)} predictions for {protein_name}.")
 
     # Step 3: Reorganize CIF + YAML files into output directory
-    # Skip compounds whose CIF already exists in output_dir 
-    print(f"2. Reorganizing {len(ligand_csv_df)} predictions into {output_dir}...")
-    update_predictions.reorg_preds(run_cache_prot, ligand_csv_df, output_dir, VERBOSE)
+    # Skip compounds whose CIF already exists in temp output_dir 
+    output_temp = os.path.join(run_cache_prot, 'temp', protein_name) # should be unique per run
+
+    print(f"2. Reorganizing {len(ligand_csv_df)} predictions into {output_temp}...")
+    update_predictions.reorg_preds(run_cache_prot, ligand_csv_df, output_temp, VERBOSE)
 
     # Step 4: Remove temporary PKL files (covalent mode only)
     if COVALENT:
         print("3. Removing temporary PKL files (covalent mode)...")
         update_predictions.remove_pkls(boltz_cache, run_cache_prot, VERBOSE)
 
-    # Step 5: Clean up run_cache
+    # Step 5: Reorg into replicate dirs
+    if protein_name == '3F75':
+        protein= 'tgcpl' 
+    elif protein_name == '5MAJ':
+        protein = 'hscpl'
+
+    update_predictions.reorg_reps(run_cache_prot, output_dir, protein)
+
+    # Step 6: Clean up run_cache with permission
     run_cache_parent = os.path.dirname(run_cache_prot)
     print(f"4. Run cache directory: {run_cache_parent}")
-    confirm = input("Delete run cache directory? This cannot be undone. [y/N]: ").strip().lower()
+    confirm = input("Delete run cache directory? This cannot be undone. [y/n]: ").strip().lower()
     if confirm == 'y':
         shutil.rmtree(run_cache_parent)
         print(f"   Deleted {run_cache_parent}.")
