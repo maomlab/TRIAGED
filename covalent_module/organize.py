@@ -94,7 +94,7 @@ def main(args):
         'BOLTZ_CACHE': boltz_cache,
         'OUTPUT': output_dir,
     }
-    import ipdb; ipdb.set_trace()
+
     missing = [name for name, value in required.items() if value is None]
     if missing:
         raise ValueError(f"Missing required arguments: {', '.join(missing)}")

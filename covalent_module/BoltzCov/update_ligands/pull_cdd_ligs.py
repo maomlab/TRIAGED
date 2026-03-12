@@ -85,7 +85,6 @@ def cdd_query(API_KEY, VAULT_ID, readout_query={}, mol_query={}):
                 elif status == "failed":
                     raise Exception(f"Export failed: {data.get('error', 'Unknown')}")
                 else:
-                    print(f"Debug - status: {status}, full response: {data}")
                     continue
             
             raise Exception("Export timed out")
@@ -177,7 +176,6 @@ def get_ic50s(readouts, molecules, syn_include=None, syn_exclude=None):
         hscpl_log_ic50 = None
         for r in readouts['objects']: 
             if str(r['molecule']) == str(molecule_id):
-                print(f"Molecule {molecule_id} readout keys: {list(r['readouts'].keys())}")
                 for key, val in r['readouts'].items():
                     # print(molecule_id, key, val['value'])
                     if str(key) == "1125023":
@@ -223,5 +221,16 @@ def update_local_data(old_metadata, old_readouts, new_metadata, new_readouts):
         if f'{col}_new' in merged_readouts.columns:
             merged_readouts[col] = merged_readouts[f'{col}_new'].fillna(merged_readouts[f'{col}_old']).infer_objects(copy=False)
             merged_readouts.drop([f'{col}_old', f'{col}_new'], axis=1, inplace=True)
+
+    # Recompute selectivity where both tgcpl and hscpl data are available
+    tgcpl_col = 'mean_tgcpl_log_ic50 (uM)'
+    hscpl_col = 'mean_hscpl_log_ic50 (uM)'
+    if tgcpl_col in merged_readouts.columns and hscpl_col in merged_readouts.columns:
+        both_available = merged_readouts[tgcpl_col].notna() & merged_readouts[hscpl_col].notna()
+        merged_readouts.loc[both_available, 'selectivity'] = (
+            merged_readouts.loc[both_available, tgcpl_col] - 
+            merged_readouts.loc[both_available, hscpl_col]
+        )
+        print(f"Recomputed selectivity for {both_available.sum()} compounds")
 
     return merged_metadata, merged_readouts

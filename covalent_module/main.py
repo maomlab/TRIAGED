@@ -229,12 +229,23 @@ def main(args):
             if VERBOSE: print(f"Fresh metadata.csv and experiment_readouts.csv written in {record_path}.")
 
         elif os.path.exists(old_meta) and os.path.exists(old_exp):
+            print("You have 5 seconds to terminate and cancel overwrite to possible exisiting records.")
+            time.sleep(5)
             if VERBOSE: print(f"Updating the provided metadata.csv and experiment_readouts.csv in {record_path}")
             old_meta_df = pd.read_csv(old_meta)
             old_exp_df = pd.read_csv(old_exp)
             # only needs to be updated in cases where we have old record files existing under same names 
             updated_metadata, updated_readouts = pull_cdd_ligs.update_local_data(old_meta_df, old_exp_df, new_metadata_df, new_readouts_df)
             # overwriting existing record files to update
+            if VERBOSE:
+                new_meta_rows = len(updated_metadata) - len(old_meta_df)
+                new_readout_rows = len(updated_readouts) - len(old_exp_df)
+                print(f"Update will add ~{new_meta_rows} metadata and ~{new_readout_rows} readouts")
+                confirm = input("Proceed? (y/n): ")
+                if confirm.lower() != 'y':
+                    print("Update cancelled")
+                    raise ValueError('Execution Cancelled')
+            
             pd.DataFrame(updated_metadata).to_csv(old_meta, index=False)
             pd.DataFrame(updated_readouts).to_csv(old_exp, index=False)
     
@@ -265,7 +276,10 @@ def main(args):
         if VERBOSE: print("predictions.csv was not found. Attempting to Dock all compounds.")
         dock_compounds = metadata_df[['substance_id', 'inchi_key', 'smiles']]
     
-    if VERBOSE: print(f"Docking {len(dock_compounds)} compounds.")
+    if VERBOSE: 
+        print(f"Docking {len(dock_compounds)} compounds. Cancel in 5 seconds to abort.")
+        time.sleep(5)
+
     # submit jobs: run boltz    
     from BoltzCov.run_boltz import submit_job
     if COVALENT:

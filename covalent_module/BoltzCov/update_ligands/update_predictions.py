@@ -44,7 +44,7 @@ def fetch_new(pred_df, metadata_df, protein, min_replicates=3):
     merged['pred_count'] = merged['pred_count'].fillna(0)
     
     # Keep compounds with no predictions OR fewer than min_replicates
-    no_pred_prot = merged[merged['pred_count'] <= min_replicates][['substance_id', 'inchi_key', 'smiles']]
+    no_pred_prot = merged[merged['pred_count'] < min_replicates][['substance_id', 'inchi_key', 'smiles']]
     
     return no_pred_prot
 
