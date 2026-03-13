@@ -1,5 +1,5 @@
 """
-Simple Boltz Analysis - 3 Input Script
+Simple Boltz Analysis 
 
 Inputs:
 1. RECORDS directory - Contains experimental_readouts.csv and predictions.csv
@@ -58,7 +58,7 @@ def validate_config(config):
     if not os.path.isdir(records_dir):
         raise FileNotFoundError(f"Records directory not found: {records_dir}")
     
-    experimental_csv = os.path.join(records_dir, 'experimental_readouts.csv')
+    experimental_csv = os.path.join(records_dir, 'experiment_readouts.csv')
     predictions_csv = os.path.join(records_dir, 'predictions.csv')
     
     if not os.path.exists(experimental_csv):
@@ -68,9 +68,18 @@ def validate_config(config):
     if 'CIF_DIR' in config and not os.path.isdir(config['CIF_DIR']):
         raise FileNotFoundError(f"Not found: {config['CIF_DIR']}")
 
-def average_replicates(df_predictions):
-    """Average replicate predictions per compound per protein."""
-    
+def average_replicates(df_predictions, protein):
+    """Average replicate predictions per compound for a specific protein."""
+    if protein == 'tgcpl':
+        protein = '3F75'
+    elif protein == 'hscpl':
+        protein = '5MAJ'
+    # Filter for specific protein
+    df_predictions = df_predictions[df_predictions['protein'] == protein].copy()
+    if df_predictions.empty:
+        print(f"[WARNING] No predictions found for protein: {protein}")
+        return df_predictions
+
     score_cols = [
         'pred_log10ic50',
         'pred_pic50',
@@ -97,7 +106,7 @@ def average_replicates(df_predictions):
     n_reps = df_predictions.groupby(group_cols).size()
 
     print(
-        f"Averaging replicates: {len(n_reps)} compound–protein pairs, "
+        f"[{protein}] Averaging replicates: {len(n_reps)} compound–protein pairs, "
         f"{n_reps.mean():.1f} reps/pair"
     )
 
@@ -218,9 +227,14 @@ def compute_metrics_and_plots(df_merged, score_col, exp_col, topN, run_name, out
     return metrics, curves
 
 
-def run_plip_analysis(cif_dir, output_dir, protein_name, receptor_type='protein'):
+def run_plip_analysis(cif_dir, output_dir, protein_name, records, COVALENT, receptor_type='protein'):
     """Run PLIP fingerprinting."""
-    
+
+    if protein_name == 'tgcpl':
+        protein_name='3F75'
+    elif protein_name == 'hscpl':
+        protein_name='5MAJ'
+
     print("Running PLIP analysis...")
     
     try:
@@ -237,11 +251,13 @@ def run_plip_analysis(cif_dir, output_dir, protein_name, receptor_type='protein'
         outdir=fp_dir,
         receptor_type=receptor_type,
         verbose=False,
-        csv_name="interaction_fingerprints",
+        csv_name=f"{protein_name}_ifps",
         selection_method='first', 
-        protein_name=protein_name
+        protein_name=protein_name, 
+        records=records, 
+        COVALENT=COVALENT
     )
-    
+
     try:
         errors = run_plip.main(plip_args)
         if errors:
@@ -282,8 +298,11 @@ def main():
     validate_config(config)
     
     records_dir = config['RECORDS']
-    experimental_csv = os.path.join(records_dir, 'experimental_readouts.csv')
+    COVALENT = config['COVALENT']
+    experimental_csv = os.path.join(records_dir, 'experiment_readouts.csv')
     predictions_csv = os.path.join(records_dir, 'predictions.csv')
+    if not COVALENT: 
+        predictions_csv = os.path.join(records_dir, 'noncov_predictions.csv')
     cif_dir = config.get('CIF_DIR')
     output_dir = config['OUTPUT_DIR']
     
@@ -294,7 +313,7 @@ def main():
     
     run_output_dir = os.path.join(output_dir, run_name)
     os.makedirs(run_output_dir, exist_ok=True)
-    
+
     print("=" * 80)
     print("Boltz Analysis")
     print("=" * 80)
@@ -327,7 +346,7 @@ def main():
     
     if cif_dir:
         print("\n" + "=" * 80)
-        run_plip_analysis(cif_dir=cif_dir, output_dir=run_output_dir, receptor_type='protein', protein_name=protein_name)
+        run_plip_analysis(cif_dir=cif_dir, output_dir=run_output_dir, receptor_type='protein', protein_name=protein_name, records=records_dir, COVALENT=COVALENT)
     
     print("\n" + "=" * 80)
     save_outputs(df_averaged, df_merged, metrics, run_output_dir)

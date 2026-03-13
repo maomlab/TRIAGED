@@ -126,11 +126,16 @@ def resolve_protein_names(protein_name):
     return subdir_filter, pdb_id
 
 
-def get_predicted_substance_ids(predictions_csv, pdb_id):
+def get_predicted_substance_ids(records, pdb_id, COVALENT):
     """
     Returns set of substance_ids from predictions_csv that have a successful
     Boltz prediction for the given protein (matched by PDB ID e.g. 3F75).
     """
+    if COVALENT: 
+        predictions_csv = os.path.join(records, 'predictions.csv')
+    else:
+        predictions_csv = os.path.join(records, 'noncov_predictions.csv')
+
     if not os.path.exists(predictions_csv):
         raise FileNotFoundError(f"predictions_csv not found: {predictions_csv}")
 
@@ -141,7 +146,7 @@ def get_predicted_substance_ids(predictions_csv, pdb_id):
 
     if 'protein' in df.columns:
         df = df[df['protein'] == pdb_id]
-        print(f"Predictions for {pdb_id}: {len(df)} compounds")
+        print(f"Predictions for {pdb_id}: {len(df)}")
     else:
         print(f"[WARNING] No 'protein' column in predictions_csv — using all {len(df)} rows.")
 
@@ -294,49 +299,42 @@ def find_all_cif_files_in_replicates(root_dir, protein_name, predicted_ids, alre
         print(f"Directory not found: {root_dir}")
         return compound_files
 
-    subdirs = [d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, d))]
+    prot_root = os.path.join(root_dir, protein_name)
+    subdirs = [d for d in os.listdir(prot_root) if os.path.isdir(os.path.join(prot_root, d))]
     if not subdirs:
-        print(f"No subdirectories found in {root_dir}")
+        print(f"No subdirectories found in {prot_root}")
         return compound_files
 
     print(f"Found {len(subdirs)} subdirectories: {', '.join(subdirs[:3])}{'...' if len(subdirs) > 3 else ''}")
 
-    for subdir in subdirs:
-        if protein_name not in subdir:
-            continue
-
-        cifs_dir = os.path.join(root_dir, subdir, 'cifs')
-        if not os.path.isdir(cifs_dir):
+    for subdir in subdirs: # rep1, rep2.. 
+        if subdir == 'rep1':
+            cifs_dir = os.path.join(prot_root, subdir, 'cifs')
+            if not os.path.isdir(cifs_dir):
+                if VERBOSE:
+                    print(f"   {subdir}: no cifs/ subdirectory, skipping.")
+                continue
+            cif_files = [f for f in os.listdir(cifs_dir) if f.endswith('.cif')]
             if VERBOSE:
-                print(f"   {subdir}: no cifs/ subdirectory, skipping.")
-            continue
+                print(f"   {subdir}: {len(cif_files)} CIF files")
 
-        cif_files = [f for f in os.listdir(cifs_dir) if f.endswith('.cif')]
-        if VERBOSE:
-            print(f"   {subdir}: {len(cif_files)} CIF files")
+            for cif_file in cif_files:
+                substance_id = extract_substance_id_from_filename(cif_file)
 
-        for cif_file in cif_files:
-            substance_id = extract_substance_id_from_filename(cif_file)
+                if substance_id not in predicted_ids:
+                    if VERBOSE:
+                        print(f"      Skipping {substance_id} (not in predictions.csv)")
+                    continue
 
-            if substance_id not in predicted_ids:
-                if VERBOSE:
-                    print(f"      Skipping {substance_id} (not in predictions.csv)")
-                continue
+                if substance_id in already_processed:
+                    if VERBOSE:
+                        print(f"      Skipping {substance_id} (already in fingerprints CSV)")
+                    continue
 
-            if substance_id in already_processed:
-                if VERBOSE:
-                    print(f"      Skipping {substance_id} (already in fingerprints CSV)")
-                continue
-
-            compound_files[substance_id].append(os.path.join(cifs_dir, cif_file))
+                compound_files[substance_id].append(os.path.join(cifs_dir, cif_file))
 
     total = sum(len(v) for v in compound_files.values())
     print(f"Found {total} CIF files for {len(compound_files)} new compounds to process")
-
-    if compound_files:
-        rep_counts = [len(v) for v in compound_files.values()]
-        print(f"Replicates per compound: min={min(rep_counts)}, max={max(rep_counts)}, mean={sum(rep_counts)/len(rep_counts):.1f}")
-
     return compound_files
 
 
@@ -353,7 +351,7 @@ def main(args):
     res_headers = ["substance_id", "name", "residue", "interaction_type"]
 
     VERBOSE = args.verbose
-
+    COVALENT = args.COVALENT
     # Receptor config
     if args.receptor_type == "protein":
         config.DNARECEPTOR = False
@@ -365,21 +363,26 @@ def main(args):
 
     # Resolve protein_name to subdir_filter (tgcpl/hscpl) and pdb_id (3F75/5MAJ)
     subdir_filter, pdb_id = resolve_protein_names(args.protein_name)
-    fingerprint_csv = os.path.join(args.outdir, 'interaction_fingerprints.csv')
-    residues_csv = os.path.join(args.outdir, 'interaction_fingerprints_residues.csv')
+    if COVALENT:
+        fingerprint_csv = os.path.join(args.records, f'{pdb_id}_ifps.csv')
+        residues_csv = os.path.join(args.records, f'{pdb_id}_ifps_residues.csv')
+    else:
+        fingerprint_csv = os.path.join(args.records, f'{pdb_id}_noncov_ifps.csv')
+        residues_csv = os.path.join(args.records, f'{pdb_id}_noncov_ifps_residues.csv')
+
     os.makedirs(args.outdir, exist_ok=True)
 
     print(f"Protein: {subdir_filter.upper()} ({pdb_id})")
     print(f"Fingerprints CSV: {fingerprint_csv}")
 
     # Load substance_ids with successful predictions (filter by PDB ID)
-    predicted_ids = get_predicted_substance_ids(args.predictions_csv, pdb_id)
+    predicted_ids = get_predicted_substance_ids(args.records, pdb_id, args.COVALENT)
     print(f"Substance IDs with predictions: {len(predicted_ids)}")
 
     # Load substance_ids already in fingerprints CSV
     already_processed = get_already_processed(fingerprint_csv)
 
-    # Find CIF files to process (filter subdirs by short name e.g. tgcpl)
+    # Find CIF files to process (filter subdirs with reps)
     compound_files = find_all_cif_files_in_replicates(
         args.directory, subdir_filter, predicted_ids, already_processed, VERBOSE
     )
