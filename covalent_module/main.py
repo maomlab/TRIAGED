@@ -113,6 +113,7 @@ def read_json_args(json_file):
         slurm_template = run_arguments.get("SLURM_TEMPLATE", None)
         slurm_template = os.path.expandvars(slurm_template) if slurm_template else None 
         
+        min_replicates = int(run_arguments.get("min_replicates") or 3)
         VERBOSE = run_arguments.get("VERBOSE", False)
         output_dir = run_arguments.get("OUTPUT", None) # include protein name if you want it to be stored in a seperate protein directory 
         output_dir = os.path.expandvars(output_dir) if output_dir else None 
@@ -121,7 +122,7 @@ def read_json_args(json_file):
     record_path,
     cdd_api_key, vault_id, readout_query, mol_query, syn_include, syn_exclude,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
-    VERBOSE, output_dir, COVALENT
+    min_replicates, VERBOSE, output_dir, COVALENT
     )
 
 def main(args):
@@ -138,7 +139,7 @@ def main(args):
     (record_path,
     cdd_api_key, vault_id, readout_query, mol_query, syn_include, syn_exclude,
     pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
-    VERBOSE, output_dir, COVALENT) = read_json_args(args.json_file)
+    min_replicates, VERBOSE, output_dir, COVALENT) = read_json_args(args.json_file)
 
     if COVALENT:
         missing = []
@@ -265,7 +266,7 @@ def main(args):
     error_csv = os.path.join(record_path, 'errored.csv')
     if os.path.exists(pred_rec):
         pred_df = pd.read_csv(pred_rec)
-        dock_compounds = update_predictions.fetch_new(pred_df, metadata_df, protein_name)
+        dock_compounds = update_predictions.fetch_new(pred_df, metadata_df, protein_name, min_replicates=min_replicates)
         if os.path.exists(error_csv):
             error_df = pd.read_csv(error_csv)
             dock_compounds = update_predictions.check_attempted(error_df, dock_compounds) 

@@ -277,12 +277,16 @@ def check_pred(run_cache_prot, record_path, VERBOSE, protein_name, COVALENT=True
 def reorg_preds(run_cache_prot, ligand_df, output_temp, VERBOSE):
     '''
     Copy .cif and .yaml files to output directory for successful predictions.
-    Files are renamed to boltz_runID_pklID format.
+    Files are renamed to boltz_runID_substanceID format.
+    
+    run_cache_prot: base directory containing per-compound prediction folders
+    ligand_df: DataFrame with 'pkl_id' and optionally 'substance_id' columns
     output_temp: /run_cache_prot/temp/protein_name
+    VERBOSE: bool for logging
     '''
     # Create output subdirectories
-    cif_dir = os.path.join(output_temp, 'cifs') # /run_cache_prot/temp/protein_name/cifs
-    yaml_dir = os.path.join(output_temp, 'yamls') # /run_cache_prot/temp/protein_name/yamls
+    cif_dir = os.path.join(output_temp, 'cifs')
+    yaml_dir = os.path.join(output_temp, 'yamls')
     os.makedirs(cif_dir, exist_ok=True)
     os.makedirs(yaml_dir, exist_ok=True)
 
@@ -290,54 +294,76 @@ def reorg_preds(run_cache_prot, ligand_df, output_temp, VERBOSE):
         pkl_id = row['pkl_id']
         substance_id = row.get('substance_id', pkl_id)
 
-        pred_path = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/{pkl_id}*')
-    
-        if pred_path:
-            boltz_runID = pred_path[0].split('/')[-4]
-        
-        # Filter cif files specific to this compound
-        cif_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*/*.cif')
+        # Locate prediction directory for this specific compound
+        pred_paths = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/{pkl_id}*')
+
+        # Fallback to substance_id if pkl_id not found
+        if not pred_paths:
+            pred_paths = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*{substance_id}*')
+
+        if not pred_paths:
+            print(f"[WARNING] No prediction directory found for {substance_id} (pkl_id: {pkl_id})")
+            continue
+
+        pred_dir = pred_paths[0]  # e.g. .../boltz_results_XYZ/predictions/pkl_id/
+
+        # Extract boltz run ID from path
+        boltz_runID = pred_dir.split('/')[-4]  # e.g. YYMMDD_HHMMSS_pklID
+
+        # Find .cif files inside this compound's prediction directory
+        cif_files = glob.glob(f'{pred_dir}/*.cif')
         if not cif_files:
-            # try by substance_id 
-            cif_files = glob.glob(f'{run_cache_prot}/*/boltz_results_*/predictions/*{substance_id}*/*.cif')
-        
-        if cif_files:
-            cif_file = cif_files[0]
-            # Copy .cif file with new name
-            cif_dest = os.path.join(cif_dir, f"{boltz_runID}_{substance_id}.cif")
-            if substance_id == boltz_runID.split('_')[-1]: 
-                cif_dest = os.path.join(cif_dir, f"{boltz_runID}.cif")
-            shutil.copy(cif_file, cif_dest)
-            if VERBOSE: print(f"Copied {substance_id} cif for {boltz_runID}")
-            
-            # Find and copy yaml file
-            # Extract parent directory: run_cache_prot/YYMMDD_HHMMSS_pklID/
-            parent_dir = cif_file.split('/boltz_results_')[0]
-            yaml_files = glob.glob(f'{parent_dir}/*.yaml')
-            if yaml_files:
-                yaml_file = yaml_files[0]
-                yaml_dest = os.path.join(yaml_dir, f"{boltz_runID}_{substance_id}.yaml")
-                if substance_id == boltz_runID.split('_')[-1]: 
-                    yaml_dest = os.path.join(yaml_dir, f"{boltz_runID}.yaml")
-                shutil.copy(yaml_file, yaml_dest)
-                if VERBOSE: print(f"Copied {substance_id} yaml for {boltz_runID}")
+            print(f"[WARNING] No .cif file found for {substance_id} in {pred_dir}")
+            continue
+
+        # Determine output filename
+        if substance_id == boltz_runID.split('_')[-1]:
+            base_name = boltz_runID
         else:
-            print(f"[WARNING] No .cif file found for {substance_id}")
-    if VERBOSE: print(f"Files copied to {output_temp}.")
+            base_name = f"{boltz_runID}_{substance_id}"
+
+        # Copy .cif
+        cif_dest = os.path.join(cif_dir, f"{base_name}.cif")
+        shutil.copy(cif_files[0], cif_dest)
+        if VERBOSE: print(f"Copied {substance_id} cif -> {cif_dest}")
+
+        # Find and copy .yaml from parent run directory
+        parent_dir = pred_dir.split('/boltz_results_')[0]
+        yaml_files = glob.glob(f'{parent_dir}/*.yaml')
+        if yaml_files:
+            yaml_dest = os.path.join(yaml_dir, f"{base_name}.yaml")
+            shutil.copy(yaml_files[0], yaml_dest)
+            if VERBOSE: print(f"Copied {substance_id} yaml -> {yaml_dest}")
+        else:
+            print(f"[WARNING] No .yaml file found for {substance_id} in {parent_dir}")
+
+    if VERBOSE: print(f"Done. Files copied to {output_temp}.")
 
 def reorg_reps(output_temp, output_dir, protein_name):
     '''
     Reorgs predictions from temp into rep directories in output_dir.
-    output_temp: /run_cache_prot/temp/protein_name
-    output_dir:  /output/user_given_output_name 
-    Files in output_temp are named: datetime_substanceid.cif/yaml
+    output_temp: /run_cache_prot/temp/protein_name  (contains cifs/ and yamls/)
+    output_dir:  /output/user_given_output_name/protein_name
+    Files in output_temp/cifs are named: datetime_pklid_substanceid.cif
     Creates new rep directories dynamically if needed.
     '''
-    output_parent = os.path.dirname(output_dir) # may have tgcpl or hscpl with rep1, rep2.. 
-    output_parent_prot = os.path.join(output_parent, protein_name) 
 
-    existing_reps = sorted(glob.glob(f'{output_parent_prot}/rep*'))
-    
+    def _copy_pair(cif_src, rep_dir):
+        '''Copy a .cif and its matching .yaml to rep_dir.'''
+        cif_name = os.path.basename(cif_src)
+        shutil.copy(cif_src, os.path.join(rep_dir, 'cifs', cif_name))
+        print(f"Copied {cif_name} → {rep_dir}/cifs/")
+
+        yaml_src = cif_src.replace('/cifs/', '/yamls/').replace('.cif', '.yaml')
+        if os.path.exists(yaml_src):
+            shutil.copy(yaml_src, os.path.join(rep_dir, 'yamls', os.path.basename(yaml_src)))
+            print(f"Copied {os.path.basename(yaml_src)} → {rep_dir}/yamls/")
+        else:
+            print(f"[WARNING] No yaml found for {cif_name}")
+
+    # Find existing reps
+    existing_reps = sorted(glob.glob(f'{output_dir}/rep*'))
+
     # Create rep1 if no reps exist
     if not existing_reps:
         rep1 = os.path.join(output_dir, 'rep1')
@@ -346,49 +372,33 @@ def reorg_reps(output_temp, output_dir, protein_name):
         existing_reps = [rep1]
         print(f"Created {rep1}")
 
-    temp_cifs = glob.glob(f'{output_temp}/temp/*/cifs/*.cif')
+    # Get temp cifs
+    temp_cifs = glob.glob(f'{output_temp}/cifs/*.cif')
     if not temp_cifs:
         print(f"[WARNING] No cif files found in {output_temp}/cifs/")
         return
 
     for cif in temp_cifs:
         cif_name = os.path.basename(cif)
-        substance_id = cif_name.split('_')[-1].split('.')[0]  # VMCC-0000740
+        # handles VMCC-0000740 which has dashes+underscores
+        substance_id = cif_name.replace('.cif', '').split('_', 3)[-1]
 
-        # Find first rep that doesn't already have this ligand
+        # Find first rep that doesn't already have this compound
         placed = False
         for rep_dir in existing_reps:
-            existing = glob.glob(f'{rep_dir}/cifs/*{substance_id}*')
-            if not existing:
-                shutil.copy(cif, os.path.join(rep_dir, 'cifs', cif_name))
-                print(f"Copied {cif_name} → {rep_dir}/cifs/")
-
-                yaml_path = cif.replace('/cifs/', '/yamls/').replace('.cif', '.yaml')
-                if os.path.exists(yaml_path):
-                    shutil.copy(yaml_path, os.path.join(rep_dir, 'yamls', os.path.basename(yaml_path)))
-                    print(f"Copied {os.path.basename(yaml_path)} → {rep_dir}/yamls/")
-                else:
-                    print(f"[WARNING] No yaml found for {cif_name}")
+            if not glob.glob(f'{rep_dir}/cifs/*{substance_id}*'):
+                _copy_pair(cif, rep_dir)
                 placed = True
                 break
 
-        # If all reps already have this ligand, create a new rep
+        # All reps have this compound — create a new rep
         if not placed:
-            new_rep = os.path.join(output_dir, f'rep{len(existing_reps)+1}')
+            new_rep = os.path.join(output_dir, f'rep{len(existing_reps) + 1}')
             os.makedirs(os.path.join(new_rep, 'cifs'), exist_ok=True)
             os.makedirs(os.path.join(new_rep, 'yamls'), exist_ok=True)
             existing_reps.append(new_rep)
             print(f"Created {new_rep}")
-
-            shutil.copy(cif, os.path.join(new_rep, 'cifs', cif_name))
-            print(f"Copied {cif_name} → {new_rep}/cifs/")
-
-            yaml_path = cif.replace('/cifs/', '/yamls/').replace('.cif', '.yaml')
-            if os.path.exists(yaml_path):
-                shutil.copy(yaml_path, os.path.join(new_rep, 'yamls', os.path.basename(yaml_path)))
-                print(f"Copied {os.path.basename(yaml_path)} → {new_rep}/yamls/")
-            else:
-                print(f"[WARNING] No yaml found for {cif_name}")          
+            _copy_pair(cif, new_rep)    
 
 def remove_pkls(boltz_cache, run_cache_prot, VERBOSE):
 

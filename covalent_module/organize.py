@@ -152,7 +152,7 @@ def main(args):
 
     print(f"2. Reorganizing {len(ligand_csv_df)} predictions into {output_temp}...")
     update_predictions.reorg_preds(run_cache_prot, ligand_csv_df, output_temp, VERBOSE)
-
+    
     # Step 4: Remove temporary PKL files (covalent mode only)
     if COVALENT:
         print("3. Removing temporary PKL files (covalent mode)...")
@@ -164,7 +164,7 @@ def main(args):
     elif protein_name == '5MAJ':
         protein = 'hscpl'
 
-    update_predictions.reorg_reps(run_cache_prot, output_dir, protein)
+    update_predictions.reorg_reps(output_temp, output_dir, protein)
 
     # Step 6: Clean up run_cache with permission
     run_cache_parent = os.path.dirname(run_cache_prot)
