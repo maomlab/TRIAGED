@@ -198,7 +198,13 @@ def compute_metrics_and_plots(df_merged, score_col, exp_col, topN, run_name, out
             dpi=300,
             bbox_inches='tight'
         )
-
+        scatter_fig = list(scatter_dict.keys())[0]
+        scatter_fig.savefig(
+            os.path.join(plots_dir, 'scatter.svg'),
+            dpi=300,
+            bbox_inches='tight',
+            format='svg'
+        )
         topN_affinity_scatter(
             truth_pred_df=df_merged,
             analysis_dict=analysis_dict,
@@ -219,6 +225,7 @@ def compute_metrics_and_plots(df_merged, score_col, exp_col, topN, run_name, out
         curve_plots = plot_curves(run_name=run_name, curves=curves, metrics=metrics)
         for curve_name, (fig, ax) in curve_plots.items():
             fig.savefig(os.path.join(plots_dir, f'{curve_name}.png'), dpi=300, bbox_inches='tight')
+            fig.savefig(os.path.join(plots_dir, f'{curve_name}.svg'), format='svg', dpi=300, bbox_inches='tight')
             plt.close(fig)
         print(f"  Saved {len(curve_plots)} curve plots")
     except Exception as e:
@@ -245,13 +252,12 @@ def run_plip_analysis(cif_dir, output_dir, protein_name, records, COVALENT, rece
     
     fp_dir = os.path.join(output_dir, 'fingerprints')
     os.makedirs(fp_dir, exist_ok=True)
-    
+
     plip_args = argparse.Namespace(
         directory=cif_dir,
         outdir=fp_dir,
         receptor_type=receptor_type,
         verbose=False,
-        csv_name=f"{protein_name}_ifps",
         selection_method='first', 
         protein_name=protein_name, 
         records=records, 

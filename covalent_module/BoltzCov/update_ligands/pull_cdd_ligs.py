@@ -228,9 +228,9 @@ def update_local_data(old_metadata, old_readouts, new_metadata, new_readouts):
     if tgcpl_col in merged_readouts.columns and hscpl_col in merged_readouts.columns:
         both_available = merged_readouts[tgcpl_col].notna() & merged_readouts[hscpl_col].notna()
         merged_readouts.loc[both_available, 'selectivity'] = (
-            merged_readouts.loc[both_available, tgcpl_col] - 
-            merged_readouts.loc[both_available, hscpl_col]
-        )
+            merged_readouts.loc[both_available, hscpl_col]/
+            merged_readouts.loc[both_available, tgcpl_col]
+            )
         print(f"Recomputed selectivity for {both_available.sum()} compounds")
 
     return merged_metadata, merged_readouts

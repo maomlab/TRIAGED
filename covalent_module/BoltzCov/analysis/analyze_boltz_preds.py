@@ -194,7 +194,7 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, exp_col
     else:
         df_sorted_pred = truth_pred_df.sort_values(by=score_col, ascending=False) 
         df_sorted_truth = truth_pred_df.sort_values(by=exp_col, ascending=True) 
-
+        
     # predicted topN by boltz
     topN_pred = df_sorted_pred.head(int(topN * len(df_sorted_pred)))
     topN_x_pred = topN_pred[['substance_id', score_col]]
@@ -268,6 +268,7 @@ def topN_affinity_scatter(truth_pred_df, analysis_dict, score_col, topN, exp_col
     ax.legend()
     if write_output:
         fig.savefig(os.path.join(write_output, f'{run_name}_top{topN*100}_scatter.png'), dpi=300, bbox_inches="tight")
+        fig.savefig(os.path.join(write_output, f'{run_name}_top{topN*100}_scatter.svg'), dpi=300, bbox_inches="tight", format='svg')
 
     if write_output is None:
         display(fig)

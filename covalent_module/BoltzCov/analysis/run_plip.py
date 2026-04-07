@@ -364,11 +364,11 @@ def main(args):
     # Resolve protein_name to subdir_filter (tgcpl/hscpl) and pdb_id (3F75/5MAJ)
     subdir_filter, pdb_id = resolve_protein_names(args.protein_name)
     if COVALENT:
-        fingerprint_csv = os.path.join(args.records, f'{pdb_id}_ifps.csv')
-        residues_csv = os.path.join(args.records, f'{pdb_id}_ifps_residues.csv')
+        fingerprint_csv = os.path.join(args.outdir, f'{pdb_id}_ifps.csv')
+        residues_csv = os.path.join(args.outdir, f'{pdb_id}_ifps_residues.csv')
     else:
-        fingerprint_csv = os.path.join(args.records, f'{pdb_id}_noncov_ifps.csv')
-        residues_csv = os.path.join(args.records, f'{pdb_id}_noncov_ifps_residues.csv')
+        fingerprint_csv = os.path.join(args.outdir,f'{pdb_id}_noncov_ifps.csv')
+        residues_csv = os.path.join(args.outdir, f'{pdb_id}_noncov_ifps_residues.csv')
 
     os.makedirs(args.outdir, exist_ok=True)
 

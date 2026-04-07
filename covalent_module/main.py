@@ -1,189 +1,199 @@
 '''
-Boltz Covalent Docking Pipeline - Main Workflow Script
-Env: cdd_pkl
-This script orchestrates the complete workflow for covalent and noncovalent docking using Boltz-2, 
-integrating with CDD Vault for compound management and experimental data tracking.
+Boltz Covalent Docking Pipeline
+Author: Manasa Yadavalli | Env: cdd_pkl
 
-Workflow Overview:
------------------
-1. Query CDD Vault for ligands and experimental readouts
-2. Update or create local compound records (metadata.csv, experiment_readouts.csv)
-3. Identify compounds that need docking (exclude previously attempted)
-4. Submit Boltz-2 covalent docking jobs via SLURM
-5. Monitor job completion
+Orchestrates covalent/non-covalent docking with Boltz-2 via SLURM.
+Ligands can be sourced from CDD Vault or provided locally.
 
-Input Requirements:
-------------------
-- JSON configuration file with parameters
-
-Output Structure:
-----------------
-<OUTPUT_DIR>/
-├── <replicate_1>/
-│   ├── PROT_LIG_model_0.cif
-│   └── hparams.yaml
-├── <replicate_2>/
-│   └── ...
-└── records/
-    ├── metadata.csv               # Compound metadata from CDD
-    ├── experiment_readouts.csv    # Experimental IC50/readout data
-    ├── predictions.csv            # Boltz prediction metrics (compiled)
-    └── errored.csv               # Failed compounds (to skip on retry)
-
-JSON Configuration Format:
--------------------------
-{
-    "RECORD_PATH": "/path/to/records",
-    "CDD_API_KEY": "your_api_key",
-    "VAULT_ID": 12345,
-    "READOUT_QUERY": {"protocol_ids": [123], "runs": [456]},
-    "MOL_QUERY": {"molecule_ids": [789]},
-    "PDB": "/path/to/protein.pdb",
-    "RES_IDX": 145,
-    "LIGAND_CHAIN": "X",
-    "MSA_PATH": "/path/to/msa/dir",
-    "RUN_CACHE": "/path/to/temp/cache",
-    "BOLTZ_CACHE": "/path/to/boltz/weights",
-    "SLURM_TEMPLATE": "/path/to/slurm_template.sh",
-    "VERBOSE": true,
-    "OUTPUT": "/path/to/output"
-}
+Ligand input (choose one):
+  CDD mode   — CDD_API_KEY + VAULT_ID + READOUT_QUERY + MOL_QUERY
+  Local mode — SMILES_INPUT (single SMILES) or SMILES_CSV (CSV with [substance_id, smiles])
 
 Usage:
-------
     python main.py --json_file config.json
-
-Dependencies:
-------------
-- BoltzCov package (update_ligands, run_boltz modules)
-- pandas, json, shutil, time, argparse, os
-- CDD Vault API access
-- SLURM cluster environment
-- Boltz-2 model weights
-
-Notes:
------
-- run_cache is deleted and recreated on each run (5 second warning)
-- Boltz weights are downloaded automatically to boltz_cache if missing
-- predictions.csv is incrementally updated (preserves previous results)
-- Failed docking attempts are logged to errored.csv to avoid retries
-
-Authors: Manasa Yadavalli
 '''
 import os
 import pandas as pd
-import json 
+import json
 import shutil
-import time 
+import time
 import argparse
-from BoltzCov.update_ligands import pull_cdd_ligs, update_predictions
+from BoltzCov.update_ligands import update_predictions
 from BoltzCov.run_boltz import pull_boltz2_weights
 
-# use ccd_pkl
-def read_json_args(json_file):
-    '''
-    Reads the json input file with arguments required to dock covalently with Boltz-2.
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+_REQUIRED_CSV_COLS = {'substance_id', 'smiles'}
+
+
+def _load_local_ligands(smiles_input: str | None, smiles_csv: str | None) -> pd.DataFrame:
+    """
+    Build a ligand DataFrame from local inputs (no CDD required).
+
+    Accepts either:
+      - smiles_input : a bare SMILES string  → single-row DataFrame
+      - smiles_csv   : path to a CSV with at minimum [substance_id, smiles]
+                       optional columns: inchi_key, name
+
+    Returns a DataFrame with columns [substance_id, smiles] and optionally
+    [inchi_key] – the same columns consumed downstream by the docking step.
+    """
+    if smiles_csv:
+        smiles_csv = os.path.expandvars(smiles_csv)
+        if not os.path.exists(smiles_csv):
+            raise FileNotFoundError(f"SMILES_CSV not found: {smiles_csv}")
+        df = pd.read_csv(smiles_csv)
+        missing = _REQUIRED_CSV_COLS - set(df.columns)
+        if missing:
+            raise ValueError(
+                f"SMILES_CSV is missing required columns: {missing}. "
+                f"Found: {list(df.columns)}"
+            )
+        # keep only the columns the pipeline cares about
+        keep = ['substance_id', 'smiles'] + [
+            c for c in ('inchi_key', 'name') if c in df.columns
+        ]
+        return df[keep].reset_index(drop=True)
+
+    if smiles_input:
+        from rdkit import Chem
+        from rdkit.Chem.inchi import MolToInchi, InchiToInchiKey
+        mol = Chem.MolFromSmiles(smiles_input)
+        if mol is None:
+            raise ValueError(f"Could not parse SMILES string: {smiles_input}")
+        inchi = MolToInchi(mol)
+        inchi_key = InchiToInchiKey(inchi)
+        return pd.DataFrame([{'substance_id': 'LIG_0001', 'smiles': smiles_input, 'inchi': inchi, 'inchi_key': inchi_key}])
     
-    :param json_file: Path to json file.
-    '''
-
-    with open(json_file, 'r') as jf:
-        run_arguments = json.load(jf)
-
-        record_path = run_arguments.get("RECORD_PATH") # can have csvs named: metadata.csv, experiment_readout.csv, predictions.csv
-        record_path = os.path.expandvars(record_path) if record_path else None  # can be None for first time run since ligands are pulled from cdd
-
-        cdd_api_key = run_arguments.get("CDD_API_KEY", None)
-        vault_id = run_arguments.get("VAULT_ID", None) # number of the vault in CDD 
-        readout_query = run_arguments.get("READOUT_QUERY", None) # is a dict 
-        mol_query = run_arguments.get("MOL_QUERY", None) # is a dict 
-        syn_include = run_arguments.get("SYN_INCLUDE", None)
-        syn_exclude = run_arguments.get("SYN_EXCLUDE", None)
-        
-        pdb = run_arguments.get("PDB")
-        pdb = os.path.expandvars(pdb) if pdb else None 
-        res_idx = run_arguments.get("RES_IDX", None)
-        ligand_chain = run_arguments.get("LIGAND_CHAIN", None)
-        msa_path = run_arguments.get("MSA_PATH")
-        msa_path = os.path.expandvars(msa_path) if msa_path else None # dont need to provide this  
-        run_cache = run_arguments.get("RUN_CACHE", None)
-        run_cache = os.path.expandvars(run_cache) if run_cache else None  # need this; just easier to have a single location to put temp stuff in and delete it completely after the run
-        boltz_cache = run_arguments.get("BOLTZ_CACHE", None)
-        boltz_cache = os.path.expandvars(boltz_cache) if boltz_cache else None  # this is needed for mols/weights downloading 
-        slurm_template = run_arguments.get("SLURM_TEMPLATE", None)
-        slurm_template = os.path.expandvars(slurm_template) if slurm_template else None 
-        
-        min_replicates = int(run_arguments.get("min_replicates") or 3)
-        VERBOSE = run_arguments.get("VERBOSE", False)
-        output_dir = run_arguments.get("OUTPUT", None) # include protein name if you want it to be stored in a seperate protein directory 
-        output_dir = os.path.expandvars(output_dir) if output_dir else None 
-        COVALENT = run_arguments.get("COVALENT", False)
-    return (
-    record_path,
-    cdd_api_key, vault_id, readout_query, mol_query, syn_include, syn_exclude,
-    pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
-    min_replicates, VERBOSE, output_dir, COVALENT
+    raise ValueError(
+        "Local mode requires either SMILES_INPUT (a SMILES string) or "
+        "SMILES_CSV (path to a CSV with columns [substance_id, smiles])."
     )
 
-def main(args):
-    '''
-    Takes in JSON with all required variables.
-    Top prority: 
-    1) Pulls ligands from CDD-Vault based on queries
-    2) Updates compound records
-    3) Docks ligands that we did not dock previously 
-    4) Reorginizes outputs 
-    5) Updates relavant results in compound records
-    '''
-    # loading input arguments from user 
-    (record_path,
-    cdd_api_key, vault_id, readout_query, mol_query, syn_include, syn_exclude,
-    pdb, res_idx, ligand_chain, msa_path, boltz_cache, run_cache, slurm_template,
-    min_replicates, VERBOSE, output_dir, COVALENT) = read_json_args(args.json_file)
+# ── config reader ─────────────────────────────────────────────────────────────
 
-    if COVALENT:
-        missing = []
-        cov_params = {
-            'pdb': pdb, 
-            'res_idx': res_idx, 
-            'ligand_chain': ligand_chain, 
-            'slurm_template': slurm_template,
-            'cdd_api_key': cdd_api_key, 
-            'vault_id': vault_id, 
-            'readout_query': readout_query, 
-            'mol_query': mol_query, 
-            'boltz_cache': boltz_cache, 
-            'run_cache':run_cache,
-            'output_dir': output_dir
-        }
+def read_json_args(json_file):
+    """
+    Reads the JSON input file with arguments required to dock with Boltz-2.
 
-        for name, value in cov_params.items():
-            if value is None:
-                missing.append(name)
-    else:
-        missing = []
-        params = {
-            'pdb': pdb, 
-            'slurm_template': slurm_template,
-            'cdd_api_key': cdd_api_key, 
-            'vault_id': vault_id, 
-            'readout_query': readout_query, 
-            'mol_query': mol_query, 
-            'boltz_cache': boltz_cache, 
-            'run_cache':run_cache,
-            'output_dir': output_dir
-        }
+    Returns a dict so callers are not position-sensitive.
+    """
+    with open(json_file, 'r') as jf:
+        a = json.load(jf)
 
-        for name, value in params.items():
-            if value is None:
-                missing.append(name)
+    def ep(key, default=None):
+        """expandvars helper that also handles None."""
+        val = a.get(key, default)
+        return os.path.expandvars(val) if isinstance(val, str) else val
 
+    return dict(
+        record_path     = ep("RECORD_PATH"),
+        # CDD (all optional)
+        cdd_api_key     = a.get("CDD_API_KEY"),
+        vault_id        = a.get("VAULT_ID"),
+        readout_query   = a.get("READOUT_QUERY"),
+        mol_query       = a.get("MOL_QUERY"),
+        syn_include     = a.get("SYN_INCLUDE"),
+        syn_exclude     = a.get("SYN_EXCLUDE"),
+        # Local SMILES (alternative to CDD)
+        smiles_input    = a.get("SMILES_INPUT"),
+        smiles_csv      = ep("SMILES_CSV"),
+        # Structure / docking
+        pdb             = ep("PDB"),
+        res_idx         = a.get("RES_IDX"),
+        ligand_chain    = a.get("LIGAND_CHAIN"),
+        msa_path        = ep("MSA_PATH"),
+        run_cache       = ep("RUN_CACHE"),
+        boltz_cache     = ep("BOLTZ_CACHE"),
+        slurm_template  = ep("SLURM_TEMPLATE"),
+        min_replicates  = int(a.get("min_replicates") or 3),
+        VERBOSE         = a.get("VERBOSE", False),
+        output_dir      = ep("OUTPUT"),
+        COVALENT        = a.get("COVALENT", False),
+    )
+
+
+# ── validation ────────────────────────────────────────────────────────────────
+
+def _validate_args(cfg: dict) -> None:
+    """
+    Raise ValueError for any combination of missing required arguments.
+    Handles CDD mode, local mode, covalent vs non-covalent.
+    """
+    cdd_mode = bool(cfg['cdd_api_key'] and cfg['vault_id'])
+    local_mode = bool(cfg['smiles_input'] or cfg['smiles_csv'])
+
+    if not cdd_mode and not local_mode:
+        raise ValueError(
+            "No ligand source provided. Supply either:\n"
+            "  • CDD_API_KEY + VAULT_ID  (CDD Vault mode)\n"
+            "  • SMILES_INPUT            (single SMILES string)\n"
+            "  • SMILES_CSV              (path to CSV with [substance_id, smiles])"
+        )
+    import ipdb; ipdb.set_trace()
+    if cdd_mode and local_mode:
+        raise ValueError(
+            "Ambiguous ligand source: both CDD credentials and local SMILES input "
+            "were supplied. Please provide only one."
+        )
+
+    # params required regardless of mode
+    shared = {k: cfg[k] for k in ('pdb', 'boltz_cache', 'run_cache', 'slurm_template', 'output_dir')}
+
+    # extra params required only for covalent docking
+    if cfg['COVALENT']:
+        shared.update({k: cfg[k] for k in ('res_idx', 'ligand_chain')})
+
+    # CDD mode needs query dicts too
+    if cdd_mode:
+        shared.update({k: cfg[k] for k in ('readout_query', 'mol_query')})
+
+    missing = [k for k, v in shared.items() if v is None]
     if missing:
         raise ValueError(f"Missing required arguments: {', '.join(missing)}")
 
+
+# ── main ──────────────────────────────────────────────────────────────────────
+
+def main(args):
+    """
+    Top priority:
+    1) Pull ligands – from CDD Vault *or* from a local SMILES / CSV input
+    2) Update compound records
+    3) Dock ligands not previously attempted
+    4) Update relevant results in compound records
+    """
+    cfg = read_json_args(args.json_file)
+    _validate_args(cfg)
+
+    # unpack for readability
+    record_path    = cfg['record_path']
+    cdd_api_key    = cfg['cdd_api_key']
+    vault_id       = cfg['vault_id']
+    readout_query  = cfg['readout_query']
+    mol_query      = cfg['mol_query']
+    syn_include    = cfg['syn_include']
+    syn_exclude    = cfg['syn_exclude']
+    smiles_input   = cfg['smiles_input']
+    smiles_csv     = cfg['smiles_csv']
+    pdb            = cfg['pdb']
+    res_idx        = cfg['res_idx']
+    ligand_chain   = cfg['ligand_chain']
+    msa_path       = cfg['msa_path']
+    run_cache      = cfg['run_cache']
+    boltz_cache    = cfg['boltz_cache']
+    slurm_template = cfg['slurm_template']
+    min_replicates = cfg['min_replicates']
+    VERBOSE        = cfg['VERBOSE']
+    output_dir     = cfg['output_dir']
+    COVALENT       = cfg['COVALENT']
+
+    cdd_mode = bool(cdd_api_key and vault_id)
+
+    # ── cache / weight setup ──────────────────────────────────────────────────
     if os.path.exists(run_cache):
-        print("[WARNING] Run Cache exists and will be deleted.")
-        print("Cancel in 5 seconds to prevent deletion. Ensure the cache directory is empty or choose a different directory.")
+        print("[WARNING] Run cache exists and will be deleted.")
+        print("Cancel in 5 seconds to prevent deletion.")
         time.sleep(5)
         shutil.rmtree(run_cache)
     os.makedirs(run_cache)
@@ -191,114 +201,168 @@ def main(args):
     if not os.path.exists(boltz_cache):
         os.makedirs(boltz_cache)
         from pathlib import Path
-        print("[WARNING] Boltz weights do not exists.")
-        print("Downloading weights and PDB ligand files...")
+        print("[WARNING] Boltz weights not found. Downloading weights and PDB ligand files…")
         pull_boltz2_weights.download_boltz2(Path(boltz_cache))
 
-    # pull ligand information and experiment readouts 
-    print("1. Pulling ligands from CDD vault using the following queries:\n"
-      f"Readout query: {readout_query}\n"
-      f"Molecule query: {mol_query}")
-    
-    readouts, molecules = pull_cdd_ligs.cdd_query(API_KEY=cdd_api_key, 
-                                    VAULT_ID=vault_id,  # Use vault_id variable
-                                    readout_query=readout_query, 
-                                    mol_query=mol_query)
-    
-    print("2. Updating compound records.")
-    old_meta = os.path.join(record_path, 'metadata.csv') 
-    old_exp = os.path.join(record_path, 'experiment_readouts.csv')
+    # ── step 1: acquire ligands ───────────────────────────────────────────────
+    if cdd_mode:
+        from BoltzCov.update_ligands import pull_cdd_ligs
+        print(
+            "1. Pulling ligands from CDD Vault using the following queries:\n"
+            f"   Readout query : {readout_query}\n"
+            f"   Molecule query: {mol_query}"
+        )
+        readouts, molecules = pull_cdd_ligs.cdd_query(
+            API_KEY=cdd_api_key,
+            VAULT_ID=vault_id,
+            readout_query=readout_query,
+            mol_query=mol_query,
+        )
+        new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(
+            readouts, molecules,
+            syn_include=syn_include,
+            syn_exclude=syn_exclude,
+        )
+    else:
+        source = cfg['smiles_csv'] or "SMILES_INPUT"
+        print(f"1. Loading ligands from local source: {source}")
+        new_metadata_df = _load_local_ligands(smiles_input, smiles_csv)
+        new_readouts_df = None  # not available in local mode
+        if VERBOSE:
+            print(f"   Loaded {len(new_metadata_df)} compound(s).")
 
-    new_readouts_df, new_metadata_df = pull_cdd_ligs.get_ic50s(readouts, molecules, syn_include=syn_include, syn_exclude=syn_exclude)
-    if record_path is None: 
-        if VERBOSE: print("Writing new records (metadata.csv, and experimental_readouts.csv) in output directory since None path provided by User.")
-        # make record dir in output if dir dne 
-        record_dir = os.path.join(output_dir, 'records')
-        os.makedirs(record_dir, exist_ok=True)
+    mode_label = "Covalent" if COVALENT else "Non-Covalent"
 
-        pd.DataFrame(new_readouts_df).to_csv(os.path.join(record_dir,"experiment_readouts.csv"), index=False)
-        pd.DataFrame(new_metadata_df).to_csv(os.path.join(record_dir, "metadata.csv"), index=False)
+    if cdd_mode:
+        # ── step 2 (CDD only): update compound records ────────────────────────
+        print("2. Updating compound records.")
 
-    if record_path: 
-        os.makedirs(record_path, exist_ok=True)
-        if not os.path.exists(old_meta) or not os.path.exists(old_exp):
-            if VERBOSE: print(f"metadata.csv or/and experiment_readouts.csv were not found in {record_path}. Writing new records.") # first time use or to skirt unintential overwriting 
-            print("You have 5 seconds to terminate and cancel overwrite to possible exisiting records.")
-            time.sleep(5)
-            pd.DataFrame(new_readouts_df).to_csv(old_exp, index=False) # writing new records to record path provided by user
-            pd.DataFrame(new_metadata_df).to_csv(old_meta, index=False)
-            if VERBOSE: print(f"Fresh metadata.csv and experiment_readouts.csv written in {record_path}.")
-
-        elif os.path.exists(old_meta) and os.path.exists(old_exp):
-            print("You have 5 seconds to terminate and cancel overwrite to possible exisiting records.")
-            time.sleep(5)
-            if VERBOSE: print(f"Updating the provided metadata.csv and experiment_readouts.csv in {record_path}")
-            old_meta_df = pd.read_csv(old_meta)
-            old_exp_df = pd.read_csv(old_exp)
-            # only needs to be updated in cases where we have old record files existing under same names 
-            updated_metadata, updated_readouts = pull_cdd_ligs.update_local_data(old_meta_df, old_exp_df, new_metadata_df, new_readouts_df)
-            # overwriting existing record files to update
+        if record_path is None:
+            record_path = os.path.join(output_dir, 'records')
             if VERBOSE:
-                new_meta_rows = len(updated_metadata) - len(old_meta_df)
-                new_readout_rows = len(updated_readouts) - len(old_exp_df)
-                print(f"Update will add ~{new_meta_rows} metadata and ~{new_readout_rows} readouts")
-                confirm = input("Proceed? (y/n): ")
+                print(f"   No RECORD_PATH supplied – writing records to {record_path}")
+        os.makedirs(record_path, exist_ok=True)
+
+        old_meta = os.path.join(record_path, 'metadata.csv')
+        old_exp  = os.path.join(record_path, 'experiment_readouts.csv')
+
+        meta_empty = not os.path.exists(old_meta) or os.path.getsize(old_meta) <= 1
+        exp_empty  = not os.path.exists(old_exp)  or os.path.getsize(old_exp)  <= 1
+
+        if meta_empty or exp_empty:
+            if VERBOSE:
+                print(
+                    f"   metadata.csv or experiment_readouts.csv not found in {record_path}. "
+                    "Writing fresh records."
+                )
+            print("   You have 5 seconds to cancel to avoid overwriting existing records.")
+            time.sleep(5)
+            pd.DataFrame(new_readouts_df).to_csv(old_exp,  index=False)
+            pd.DataFrame(new_metadata_df).to_csv(old_meta, index=False)
+            if VERBOSE:
+                print(f"   Fresh records written to {record_path}.")
+        else:
+            print("   You have 5 seconds to cancel to avoid overwriting existing records.")
+            time.sleep(5)
+            if VERBOSE:
+                print(f"   Merging new CDD data into existing records in {record_path}.")
+            old_meta_df = pd.read_csv(old_meta)
+            old_exp_df  = pd.read_csv(old_exp)
+            updated_metadata, updated_readouts = pull_cdd_ligs.update_local_data(
+                old_meta_df, old_exp_df, new_metadata_df, new_readouts_df
+            )
+            if VERBOSE:
+                print(
+                    f"   Update will add ~{len(updated_metadata) - len(old_meta_df)} metadata rows "
+                    f"and ~{len(updated_readouts) - len(old_exp_df)} readout rows."
+                )
+                confirm = input("   Proceed? (y/n): ")
                 if confirm.lower() != 'y':
-                    print("Update cancelled")
-                    raise ValueError('Execution Cancelled')
-            
+                    raise ValueError("Execution cancelled by user.")
             pd.DataFrame(updated_metadata).to_csv(old_meta, index=False)
-            pd.DataFrame(updated_readouts).to_csv(old_exp, index=False)
-    
-    if VERBOSE: print("-SUCCESS- Record files updated with CDD-Vault information.")
-    
-    # obtain list of ligands that need to be docked 
-    protein_name = os.path.splitext(os.path.basename(pdb))[0]
-    if COVALENT: 
-        print("3. Checking existing predictions and performing Docking with Boltz-2 Covalent.")
-        pred_rec = os.path.join(record_path, 'predictions.csv')
-    else: 
-        print("3. Checking existing predictions and performing Docking with Boltz-2 Non-Covalent.")
-        pred_rec = os.path.join(record_path, 'noncov_predictions.csv') 
-    metadata_df = pd.read_csv(old_meta)
-    
-    # exclude previous ligands that had a docking attempt 
-    error_csv = os.path.join(record_path, 'errored.csv')
-    if os.path.exists(pred_rec):
-        pred_df = pd.read_csv(pred_rec)
-        dock_compounds = update_predictions.fetch_new(pred_df, metadata_df, protein_name, min_replicates=min_replicates)
-        if os.path.exists(error_csv):
-            error_df = pd.read_csv(error_csv)
-            dock_compounds = update_predictions.check_attempted(error_df, dock_compounds) 
-        else: 
-            if VERBOSE: print("No errored compounds.")
+            pd.DataFrame(updated_readouts).to_csv(old_exp,  index=False)
+
+        if VERBOSE:
+            print("-SUCCESS- Record files updated.")
+
+        # ── step 3 (CDD only): filter already-docked compounds ───────────────
+        protein_name  = os.path.splitext(os.path.basename(pdb))[0]
+        pred_filename = 'predictions.csv' if COVALENT else 'noncov_predictions.csv'
+        pred_rec      = os.path.join(record_path, pred_filename)
+        error_csv     = os.path.join(record_path, 'errored.csv')
+
+        print(f"3. Checking existing predictions and performing {mode_label} docking with Boltz-2.")
+
+        metadata_df = pd.read_csv(old_meta)
+        if os.path.exists(pred_rec):
+            pred_df = pd.read_csv(pred_rec)
+            dock_compounds = update_predictions.fetch_new(
+                pred_df, metadata_df, protein_name, min_replicates=min_replicates
+            )
+            if os.path.exists(error_csv):
+                error_df = pd.read_csv(error_csv)
+                dock_compounds = update_predictions.check_attempted(error_df, dock_compounds)
+            elif VERBOSE:
+                print("   No errored compounds found.")
+        else:
+            if VERBOSE:
+                print(f"   {pred_filename} not found – attempting to dock all compounds.")
+            dock_compounds = metadata_df[['substance_id', 'smiles'] + (
+                ['inchi_key'] if 'inchi_key' in metadata_df.columns else []
+            )]
 
     else:
-        if VERBOSE: print("predictions.csv was not found. Attempting to Dock all compounds.")
-        dock_compounds = metadata_df[['substance_id', 'inchi_key', 'smiles']]
-    
-    if VERBOSE: 
-        print(f"Docking {len(dock_compounds)} compounds. Cancel in 5 seconds to abort.")
+        # ── local mode: dock the input directly, touch no record files ────────
+        print(f"2. Local mode – skipping record update.")
+        print(f"3. Performing {mode_label} docking with Boltz-2.")
+        dock_compounds = new_metadata_df
+
+    if VERBOSE:
+        print(f"   Docking {len(dock_compounds)} compound(s). Cancel in 5 seconds to abort.")
         time.sleep(5)
 
-    # submit jobs: run boltz    
+    # ── step 4: submit docking jobs ───────────────────────────────────────────
     from BoltzCov.run_boltz import submit_job
+
     if COVALENT:
-        final_status = submit_job.run_boltz_cov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, run_cache=run_cache,
-                        res_idx=res_idx, ligand_chain=ligand_chain, VERBOSE=VERBOSE, 
-                        slurm_template=slurm_template, msa_path=msa_path)
+        final_status = submit_job.run_boltz_cov(
+            prot_file=pdb,
+            ligand_df=dock_compounds,
+            boltz_cache=boltz_cache,
+            run_cache=run_cache,
+            res_idx=res_idx,
+            ligand_chain=ligand_chain,
+            VERBOSE=VERBOSE,
+            slurm_template=slurm_template,
+            msa_path=msa_path,
+        )
     else:
-        final_status = submit_job.run_boltz_noncov(prot_file=pdb, ligand_df=dock_compounds, boltz_cache=boltz_cache, 
-                        run_cache=run_cache, VERBOSE=VERBOSE, slurm_template=slurm_template, msa_path=msa_path)
-    # check when done 
+        final_status = submit_job.run_boltz_noncov(
+            prot_file=pdb,
+            ligand_df=dock_compounds,
+            boltz_cache=boltz_cache,
+            run_cache=run_cache,
+            VERBOSE=VERBOSE,
+            slurm_template=slurm_template,
+            msa_path=msa_path,
+        )
+
     if final_status == "COMPLETED":
         print("Jobs completed!")
     else:
         print(f"Job failed with status: {final_status}")
-    
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--json_file", required=True)
-    args = parser.parse_args()
 
+
+# ── entry point ───────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Boltz-2 covalent/non-covalent docking pipeline."
+    )
+    parser.add_argument(
+        "--json_file",
+        required=True,
+        help="Path to JSON configuration file.",
+    )
+    args = parser.parse_args()
     main(args)
