@@ -130,7 +130,7 @@ def _validate_args(cfg: dict) -> None:
             "  • SMILES_INPUT            (single SMILES string)\n"
             "  • SMILES_CSV              (path to CSV with [substance_id, smiles])"
         )
-    import ipdb; ipdb.set_trace()
+
     if cdd_mode and local_mode:
         raise ValueError(
             "Ambiguous ligand source: both CDD credentials and local SMILES input "

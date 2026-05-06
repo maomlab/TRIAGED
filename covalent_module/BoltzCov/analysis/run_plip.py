@@ -242,7 +242,6 @@ def convert_pdb_to_pdb(source_pdb_path, target_pdb_path):
 # ── PLIP interaction extraction ────────────────────────────────────────────────
 
 def get_interactions(interactions):
-    """Returns counts of each interaction type as a list."""
     return [
         len(interactions.saltbridge_lneg + interactions.saltbridge_pneg),
         len(interactions.hbonds_ldon + interactions.hbonds_pdon),
@@ -250,25 +249,30 @@ def get_interactions(interactions):
         len(interactions.pistacking),
         len(interactions.halogen_bonds),
         len(interactions.water_bridges),
+        len(interactions.hydrophobic_contacts),  # ✅ add
+        len(interactions.metal_complexes),        # ✅ add
     ]
 
 
 def get_interacting_residues(interactions):
-    """Returns dict of {restype+resnr: interaction_type} for all interactions."""
-    residues = {}
+    residues = defaultdict(set)
     for sb in interactions.saltbridge_lneg + interactions.saltbridge_pneg:
-        residues[f'{sb.restype}{sb.resnr}'] = 'saltbridge'
+        residues[f'{sb.restype}{sb.resnr}'].add('saltbridge')
     for hb in interactions.hbonds_ldon + interactions.hbonds_pdon:
-        residues[f'{hb.restype}{hb.resnr}'] = 'hbond'
+        residues[f'{hb.restype}{hb.resnr}'].add('hbond')
     for pc in interactions.pication_laro + interactions.pication_paro:
-        residues[f'{pc.restype}{pc.resnr}'] = 'pication'
+        residues[f'{pc.restype}{pc.resnr}'].add('pication')
     for ps in interactions.pistacking:
-        residues[f'{ps.restype}{ps.resnr}'] = 'pistack'
+        residues[f'{ps.restype}{ps.resnr}'].add('pistack')
     for ha in interactions.halogen_bonds:
-        residues[f'{ha.restype}{ha.resnr}'] = 'halogen'
+        residues[f'{ha.restype}{ha.resnr}'].add('halogen')
     for wb in interactions.water_bridges:
-        residues[f'{wb.restype}{wb.resnr}'] = 'waterbridge'
-    return residues
+        residues[f'{wb.restype}{wb.resnr}'].add('waterbridge')
+    for hc in interactions.hydrophobic_contacts:
+        residues[f'{hc.restype}{hc.resnr}'].add('hydrophobic')
+    for mc in interactions.metal_complexes:
+        residues[f'{mc.restype}{mc.resnr}'].add('metal')
+    return dict(residues)
 
 
 # ── CIF file discovery ─────────────────────────────────────────────────────────
@@ -346,7 +350,7 @@ def main(args):
         "numheavy", "numrotbonds", "numrings",
         "hydrophobicatoms", "hbondacceptors",
         "saltbridges", "hbonds", "pication",
-        "pistack", "halogen", "waterbridge"
+        "pistack", "halogen", "waterbridge", "hydrophobic", "metal"
     ]
     res_headers = ["substance_id", "name", "residue", "interaction_type"]
 
@@ -451,8 +455,9 @@ def main(args):
                 *get_interactions(interactions),
             ])
 
-            for resid, int_type in get_interacting_residues(interactions).items():
-                residue_data.append([substance_id, name, resid, int_type])
+            for resid, int_types in get_interacting_residues(interactions).items():
+                for int_type in int_types:  # one row per interaction type
+                    residue_data.append([substance_id, name, resid, int_type])
 
             if VERBOSE:
                 print(f"  Done: {substance_id}")
