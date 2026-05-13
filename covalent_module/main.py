@@ -112,7 +112,6 @@ def read_json_args(json_file):
         COVALENT        = a.get("COVALENT", False),
     )
 
-
 # ── validation ────────────────────────────────────────────────────────────────
 
 def _validate_args(cfg: dict) -> None:
