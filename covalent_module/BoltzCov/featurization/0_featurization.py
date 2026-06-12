@@ -73,7 +73,6 @@ def build_feature_matrix(
 #####################
 
 def main(args):
-    import ipdb; ipdb.set_trace()
     cfg = get_files.read_json_args(args.json_file)
 
     record_path            = cfg['record_path']
@@ -115,7 +114,7 @@ def main(args):
     # r group decomposition
     print("\nRunning R group decomposition...")
     suppl     = Chem.SDMolSupplier(sdf_file, removeHs=False)
-    r_one_hot = r_decomp.run_decomp(suppl)
+    r_one_hot = r_decomp.run_decomp(suppl, output_dir=record_path)
 
     # experimental data — substance_id from here is the anchor
     print("\nLoading experimental data...")

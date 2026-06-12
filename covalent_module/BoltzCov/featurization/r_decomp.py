@@ -3,12 +3,13 @@ from rdkit import Chem
 import numpy as np
 from rdkit.Chem import rdRGroupDecomposition
 from rdkit.Chem import PandasTools
+import os
 
 #####################
 # R group decomp
 #####################
 
-def core_matching(suppl, core1=Chem.MolFromSmarts("n1c(N([*:1])[*:2])nc(C#N)nc1([*:3])")):
+def core_matching(suppl, core1=Chem.MolFromSmarts("n1c(N2CCOCC2)nc(C#N)nc1[*:3]")):
     """Filters supplier for molecules matching the triazine core."""
     core_hits = []
     names = []
@@ -29,7 +30,7 @@ def core_matching(suppl, core1=Chem.MolFromSmarts("n1c(N([*:1])[*:2])nc(C#N)nc1(
     return core_hits, fails, names
 
 
-def r_decomp(core_hits, names, core1=Chem.MolFromSmarts("n1c(N([*:1])[*:2])nc(C#N)nc1([*:3])")):
+def r_decomp(core_hits, names, core1=Chem.MolFromSmarts("n1c(N2CCOCC2)nc(C#N)nc1[*:3]")):
     """
     R group decomposition on core hits.
     Filters names by same success indices as decomp to ensure alignment.
@@ -55,7 +56,7 @@ def r_decomp(core_hits, names, core1=Chem.MolFromSmarts("n1c(N([*:1])[*:2])nc(C#
         f"Misalignment: {len(successful_names)} names vs {len(decomp_df1)} rows in decomp"
 
     decomp_df1.insert(0, "substance_id", successful_names)
-    decomp_df1 = decomp_df1.drop(decomp_df1.columns[3], axis=1)
+    decomp_df1 = decomp_df1.drop(columns=['R2', 'R4', 'R5'], errors='ignore')
     decomp_df1 = decomp_df1.dropna(subset=['R3'])
 
     return decomp_df1
@@ -162,9 +163,9 @@ def count_unique_rgroups_per_position(all_frags, rgroup_cols=["R1", "R3a", "R3b"
 
 def assign_ids(group_pos_count):
     """Assigns random unique integer IDs to each R group at each position."""
-    R1  = group_pos_count['R1']
-    R3a = group_pos_count['R3a']
-    R3b = group_pos_count['R3b']
+    R1  = group_pos_count['R1'].copy()
+    R3a = group_pos_count['R3a'].copy()
+    R3b = group_pos_count['R3b'].copy()
 
     np.random.seed(42)
     R1['R_id']  = np.random.choice(range(10000, 99999), size=len(R1),  replace=False)
@@ -197,18 +198,49 @@ def merge_r_ids(R1, R3a, R3b, all_frags):
     return all_frags
 
 
+def write_rgroup_csvs(r_group_ids_df, R1, R3a, R3b, output_dir):
+    """
+    Writes two CSVs to output_dir:
+    1. compound_rgroup_mapping.csv — per-compound R-group SMILES and IDs
+    2. rgroup_lookup.csv — per-position R-group ID to SMILES mapping
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # per-compound mapping
+    mapping = r_group_ids_df[[
+    'substance_id',
+    'R1',  'R1_id',
+    'R3a', 'R3a_id',
+    'R3b', 'R3b_id'
+    ]].copy()
+    mapping = mapping.rename(columns={
+        'R3a': 'R2', 'R3a_id': 'R2_id',
+        'R3b': 'R3', 'R3b_id': 'R3_id'
+    })
+    mapping_path = os.path.join(output_dir, 'compound_rgroup_mapping1.csv')
+    mapping.to_csv(mapping_path, index=False)
+    print(f"  Compound R-group mapping written: {mapping_path}  ({len(mapping)} entries)")
+
+    # per-position lookup tables
+    for name, df, label in [('R1', R1, 'R1'), ('R3a', R3a, 'R2'), ('R3b', R3b, 'R3')]:
+        out = df[['R_id', 'R_group', 'count']].sort_values('R_id').reset_index(drop=True)
+        path = os.path.join(output_dir, f"{label}_id_lookup.csv")
+        out.to_csv(path, index=False)
+        print(f"  R-group lookup written: {path}  ({len(out)} entries)")
+
+
 def make_one_hot_r(r_group_ids_df):
     """One hot encodes R group IDs per position. Carries substance_id."""
     design_matrix = pd.get_dummies(
         r_group_ids_df[["R1_id", "R3a_id", "R3b_id"]].astype(str),
-        prefix=["R1", "R3a", "R3b"]
+        prefix=["R1", "R2", "R3"]
     )
     design_matrix = design_matrix.astype(int)
     design_matrix.insert(0, 'substance_id', r_group_ids_df['substance_id'].values)
     return design_matrix
 
 
-def run_decomp(suppl):
+def run_decomp(suppl, output_dir=None):
     """Full R group decomposition pipeline. Returns one-hot encoded R group matrix."""
     core_hits, _, names = core_matching(suppl)
     decomp_df1          = r_decomp(core_hits, names)
@@ -218,5 +250,12 @@ def run_decomp(suppl):
     group_pos_count     = count_unique_rgroups_per_position(all_frags)
     R1, R3a, R3b        = assign_ids(group_pos_count)
     r_group_ids_df      = merge_r_ids(R1, R3a, R3b, all_frags)
+    if output_dir is not None:
+        write_rgroup_csvs(r_group_ids_df, R1, R3a, R3b, output_dir)
     r_one_hot           = make_one_hot_r(r_group_ids_df)
     return r_one_hot
+
+
+if __name__ == '__main__':
+    suppl = list(Chem.SDMolSupplier('/home/ymanasa/turbo/ymanasa/opt/tgcpl-campaign/martin_ligs/records/martin_ligs.sdf'))
+    run_decomp(suppl, output_dir='/home/ymanasa/turbo/ymanasa/opt/tgcpl-campaign/martin_ligs/records')

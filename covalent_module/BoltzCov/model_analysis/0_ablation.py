@@ -4,6 +4,7 @@ import os
 import argparse
 from datetime import datetime
 
+
 ##########################
 # Feature Block Definitions
 ##########################
@@ -50,12 +51,55 @@ def get_feature_blocks(df):
                                             or c.startswith('R3b_')],
     }
 
-    # report empty blocks
     for name, block_cols in blocks.items():
         if not block_cols:
             print(f"Warning: block '{name}' has no columns — check prefixes")
 
     return blocks
+
+
+##########################
+# Apply Block Filters
+##########################
+
+def apply_block_filters(blocks, block_filters):
+    """
+    Apply include/exclude filters to block columns from JSON BLOCK_FILTERS.
+    
+    Supports per block:
+      - include_prefixes : only keep columns starting with these prefixes
+      - include_columns  : whitelist specific columns
+      - exclude_columns  : blacklist specific columns
+    """
+    filtered = {}
+    for block_name, cols in blocks.items():
+        if block_name not in block_filters:
+            filtered[block_name] = cols
+            continue
+
+        f = block_filters[block_name]
+
+        # apply include_prefixes
+        if 'include_prefixes' in f:
+            prefixes = f['include_prefixes']
+            cols = [c for c in cols if any(c.startswith(p) for p in prefixes)]
+
+        # apply include_columns (whitelist)
+        if 'include_columns' in f:
+            whitelist = set(f['include_columns'])
+            cols = [c for c in cols if c in whitelist]
+
+        # apply exclude_columns (blacklist)
+        if 'exclude_columns' in f:
+            blacklist = set(f['exclude_columns'])
+            cols = [c for c in cols if c not in blacklist]
+
+        if not cols:
+            print(f"Warning: block '{block_name}' has no columns after filtering")
+
+        filtered[block_name] = cols
+
+    return filtered
 
 
 ##########################
@@ -68,7 +112,6 @@ def select_columns(df, blocks, requested):
     unknown = []
 
     for item in requested:
-        # full block name as string
         if isinstance(item, str):
             if item in blocks:
                 resolved[item] = blocks[item]
@@ -79,19 +122,17 @@ def select_columns(df, blocks, requested):
             else:
                 unknown.append(item)
 
-        # dict with block name + specific columns
         elif isinstance(item, dict):
-            block_name = item.get('block')
+            block_name     = item.get('block')
             cols_requested = item.get('columns', [])
 
             if block_name not in blocks:
                 unknown.append(block_name)
                 continue
 
-            # validate requested columns exist in that block
             block_cols = blocks[block_name]
-            valid   = [c for c in cols_requested if c in block_cols]
-            invalid = [c for c in cols_requested if c not in block_cols]
+            valid      = [c for c in cols_requested if c in block_cols]
+            invalid    = [c for c in cols_requested if c not in block_cols]
 
             if invalid:
                 print(f"Warning: these columns not found in block '{block_name}': {invalid}")
@@ -104,7 +145,7 @@ def select_columns(df, blocks, requested):
         print(f"Warning: unknown blocks or columns: {unknown}")
 
     # deduplicate preserving order
-    seen = set()
+    seen   = set()
     deduped = []
     for c in selected_cols:
         if c not in seen:
@@ -112,6 +153,7 @@ def select_columns(df, blocks, requested):
             deduped.append(c)
 
     return deduped, resolved
+
 
 ##########################
 # Main
@@ -123,29 +165,43 @@ def main(args):
 
     feature_matrix_path = os.path.expandvars(cfg['FEATURE_MATRIX'])
     output_base_dir     = os.path.expandvars(cfg['OUTPUT_DIR'])
-    requested           = cfg['INCLUDE']   # list of block names and/or column names
+    requested           = cfg['INCLUDE']
     target_cols         = cfg.get('TARGETS', [])
+    block_filters       = cfg.get('BLOCK_FILTERS', {})
 
-    # timestamp for directory and filename
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
-    # create timestamped output directory
-    run_dir = os.path.join(output_base_dir, timestamp)
+    run_dir   = os.path.join(output_base_dir, timestamp)
     os.makedirs(run_dir, exist_ok=True)
 
-    # load feature matrix
-    df = pd.read_csv(feature_matrix_path, index_col='substance_id')
+    df     = pd.read_csv(feature_matrix_path, index_col='substance_id')
+    # --- compute selectivity and add to feature matrix ---
+    tgcpl_col = 'mean_tgcpl_log_ic50 (uM)'
+    hscpl_col = 'mean_hscpl_log_ic50 (uM)'
 
-    # get block definitions
+    if tgcpl_col in df.columns and hscpl_col in df.columns:
+        # selectivity = log(HsCPL IC50 / TgCPL IC50) = HsCPL - TgCPL in log space
+        # positive value = more selective for TgCPL (higher HsCPL IC50 = harder to inhibit human)
+        df['selectivity'] = df[hscpl_col] - df[tgcpl_col]
+        n_valid = df['selectivity'].notna().sum()
+        print(f"Computed selectivity for {n_valid} compounds "
+            f"(range: {df['selectivity'].min():.2f} to {df['selectivity'].max():.2f})")
+    else:
+        print(f"Warning: could not compute selectivity — "
+            f"missing {tgcpl_col!r} or {hscpl_col!r}")
+
+    blocks = get_feature_blocks(df)
     blocks = get_feature_blocks(df)
 
-    # resolve requested blocks/columns
+    # apply JSON block filters
+    if block_filters:
+        blocks = apply_block_filters(blocks, block_filters)
+        print(f"Applied BLOCK_FILTERS for: {list(block_filters.keys())}")
+
     selected_cols, resolved = select_columns(df, blocks, requested)
 
     if not selected_cols:
         raise ValueError("No valid columns selected — check your INCLUDE list.")
 
-    # always keep target cols if present
     keep_cols = selected_cols.copy()
     for t in target_cols:
         if t in df.columns and t not in keep_cols:
@@ -153,18 +209,14 @@ def main(args):
 
     X = df[keep_cols]
 
-    # build filename — blocks included, truncated if too long
-    block_str = '_'.join(requested)
-    if len(block_str) > 80:
-        block_str = block_str[:80]
-    fname = f"{timestamp}.csv"
+    fname   = f"{timestamp}.csv"
     outpath = os.path.join(run_dir, fname)
-
     X.to_csv(outpath)
 
-    # print summary
     print(f"\nRun: {timestamp}")
     print(f"Blocks/columns requested: {requested}")
+    if block_filters:
+        print(f"Block filters applied: {json.dumps(block_filters, indent=2)}")
     print(f"\nResolved columns per block:")
     for item, cols in resolved.items():
         print(f"  {item}: {len(cols)} columns")
@@ -172,15 +224,15 @@ def main(args):
     print(f"Total columns in output (inc. targets): {X.shape[1]}")
     print(f"Saved to: {outpath}")
 
-    # save a manifest so you know exactly what was in this run
     manifest = {
-        'timestamp':   timestamp,
-        'requested':   requested,
-        'targets':     target_cols,
-        'resolved':    {k: v for k, v in resolved.items()},
-        'output_file': outpath,
-        'n_features':  len(selected_cols),
-        'n_samples':   X.shape[0],
+        'timestamp':    timestamp,
+        'requested':    requested,
+        'block_filters': block_filters,
+        'targets':      target_cols,
+        'resolved':     {k: v for k, v in resolved.items()},
+        'output_file':  outpath,
+        'n_features':   len(selected_cols),
+        'n_samples':    X.shape[0],
     }
     manifest_path = os.path.join(run_dir, f"{timestamp}_manifest.json")
     with open(manifest_path, 'w') as f:
