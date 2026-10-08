@@ -47,8 +47,8 @@ def get_feature_blocks(df):
                                             'molwt', 'numheavy', 'numrotbonds',
                                             'numrings', 'hydrophobicatoms', 'hbondacceptors']],
         'rgroup':                       [c for c in cols if c.startswith('R1_')
-                                            or c.startswith('R3a_')
-                                            or c.startswith('R3b_')],
+                                            or c.startswith('R2_')
+                                            or c.startswith('R3_')],
     }
 
     for name, block_cols in blocks.items():
@@ -93,6 +93,10 @@ def apply_block_filters(blocks, block_filters):
         if 'exclude_columns' in f:
             blacklist = set(f['exclude_columns'])
             cols = [c for c in cols if c not in blacklist]
+
+        if 'exclude_prefixes' in f:
+            prefixes = f['exclude_prefixes']
+            cols = [c for c in cols if not any(c.startswith(p) for p in prefixes)]
 
         if not cols:
             print(f"Warning: block '{block_name}' has no columns after filtering")
@@ -174,6 +178,13 @@ def main(args):
     os.makedirs(run_dir, exist_ok=True)
 
     df     = pd.read_csv(feature_matrix_path, index_col='substance_id')
+
+    # --- drop standard deviation columns (e.g. across replicate docking runs) ---
+    std_cols = [c for c in df.columns if 'std' in c.lower()]
+    if std_cols:
+        print(f"Dropping {len(std_cols)} std columns: {std_cols}")
+        df = df.drop(columns=std_cols)
+
     # --- compute selectivity and add to feature matrix ---
     tgcpl_col = 'mean_tgcpl_log_ic50 (uM)'
     hscpl_col = 'mean_hscpl_log_ic50 (uM)'

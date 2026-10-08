@@ -20,7 +20,7 @@ def verify_covalent(res_name):
     :param res_name: Three-letter residue code (e.g., 'CYS').
     :return (bool): True if covalent-capable, False otherwise.
     '''
-    cov_aa = {"CYS", "SER", "THR", "LYS", "HIS", "PRO", "TYR", "GLU", "ASP"}
+    cov_aa = {"CYS", "SER", "THR", "LYS", "HIS", "PRO", "TYR", "GLU", "ASP", "ASN"}
     return res_name.upper() in cov_aa
 
 def residue_cov_atom(res_name):
@@ -39,6 +39,7 @@ def residue_cov_atom(res_name):
         "TYR": "OH",
         "GLU": "OE2",
         "ASP": "OD2",
+        "ASN": "ND2"
     }
     try:
         return mapping[res_name]

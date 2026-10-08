@@ -109,15 +109,15 @@ def read_boltz_predictions(predictions_dir):
     data = []
     list_compound_dirs = [d.name for d in os.scandir(predictions_dir) if d.is_dir()]
     for compound_name in list_compound_dirs:
-        compound_id = compound_name.split('_')[-1]
+        substance_id = compound_name.split('_')[-1]
         compound_dir = os.path.join(predictions_dir, compound_name)
-        results = [compound_dir,  f"boltz_results_{compound_id}", "predictions", f"{compound_id}"]
+        results = [compound_dir,  f"boltz_results_{substance_id}", "predictions", f"{substance_id}"]
         compound_result =  "/".join(results)
         if not os.path.isdir(compound_result):
             continue
 
-        affinity_file = os.path.join(compound_result, f"affinity_{compound_id}.json")
-        confidence_file = os.path.join(compound_result, f"confidence_{compound_id}_model_0.json")
+        affinity_file = os.path.join(compound_result, f"affinity_{substance_id}.json")
+        confidence_file = os.path.join(compound_result, f"confidence_{substance_id}_model_0.json")
 
         if os.path.exists(affinity_file) and os.path.exists(confidence_file):
             with open(affinity_file, 'r') as af:
@@ -142,7 +142,7 @@ def read_boltz_predictions(predictions_dir):
             energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
 
             data.append({
-                "compound_id": compound_id,
+                "substance_id": substance_id,
                 "Pred log10(IC50)": affinity_pred_value,
                 "Pred pIC50": pred_pic50,
                 "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,

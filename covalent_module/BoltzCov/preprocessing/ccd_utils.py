@@ -284,6 +284,7 @@ def get_link_atoms(parent_file, records_csv):
 
 WARHEAD_REACTIONS = { "nitrile": "[C:3][C:4]#[N:5]>>[C:3][13C:4]=[N:5]", 
 "nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]",
+"psuedo_bond": "[C:5]=[O:1]>>[C:5]=[13O:1]",
 # "alkylhalide" : "[CX4;CH,CH2:2][I,Br,Cl:3]>>[13C:2]",
 # "vinyl-sulfone" : "[C:3]=[C:4][S:5](=O)=O>>[13C:3][C:4][S:5](=O)=O", # for CYS rxn; might be diff for HIS (Schneider, Grabowsky 2015)
 # "acrylamide" : "[C:2]=[C:3]-C(=O)-[N:4]>>[13C:3]-[C:2]-C(=O)-[N:4]",
@@ -420,6 +421,8 @@ def ligand_cov_atom(no_lg_smiles):
     for atom in mol.GetAtoms():
         if atom.GetSymbol() == 'C' and atom.GetIsotope() == 13:
             return f'C{atom.GetIdx()}'
+        elif atom.GetSymbol() == 'O' and atom.GetIsotope() == 13:
+            return f'O{atom.GetIdx()}'
     return -1
 
 def remove_leaving_group(smiles):

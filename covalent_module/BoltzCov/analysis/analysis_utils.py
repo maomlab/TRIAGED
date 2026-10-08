@@ -126,6 +126,10 @@ def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
     ax.plot(x, y_pred, color='grey', linestyle=":", label=f"Linear fit (R² = {r_squared:.2f})")
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    ax.set_xlim(-2, 2)
+
+    ax.set_xticks(np.arange(-2, 2.1, 1))
+    ax.set_yticks(np.arange(-2, 3.1, 1))
 
     # Titles
     plt.suptitle(f"Experimental vs \n{score_col} Correlation", fontsize=12, fontweight='bold', y=1.00)

@@ -364,4 +364,5 @@ if __name__ == "__main__":
         help="Path to JSON configuration file.",
     )
     args = parser.parse_args()
+    import ipdb; ipdb.set_trace()
     main(args)

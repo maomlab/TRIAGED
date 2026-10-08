@@ -345,7 +345,7 @@ def main():
     df_merged = merge_with_experimental(df_averaged, df_experimental, exp_col)
     
     print("\n" + "=" * 80)
-   
+    import ipdb; ipdb.set_trace()
     metrics, _ = compute_metrics_and_plots(
         df_merged, score_col, exp_col, topN, run_name, run_output_dir
     )
