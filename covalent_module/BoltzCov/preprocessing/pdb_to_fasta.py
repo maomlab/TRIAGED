@@ -1,7 +1,7 @@
 import sys
 import re 
 
-def build_sequence(pdb_file, lig_chain):
+def build_sequence(pdb_file, lig_chain='A'):
     """
     Converts a PDB file to a sequence.
 

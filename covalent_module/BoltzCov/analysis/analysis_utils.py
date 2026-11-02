@@ -1,8 +1,6 @@
 # analysis main script 
 # conda env: boltz_analysis_env 
-# Adapted from Miguel Limcaoco 
 import pandas as pd
-import time 
 import matplotlib.pyplot as plt
 import numpy as np
 import math 
@@ -14,155 +12,32 @@ from scipy.special import expit
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import roc_auc_score, roc_curve, precision_recall_curve, auc as sk_auc, average_precision_score
 
-def convert_IC_to_energy(IC):
-    """
-    Convert log10(IC50) measured in uM to kcal/mol.
-    :param IC: IC50.
-    :return: converted kcal/mol estimate.
-    """
-    return (6 - IC) * 1.364
-
-def read_boltz_predictions(predictions_dir, reps=False):
-    """
-    Reads prediction JSON files from subdirectories and compiles them into a pandas DataFrame.
-    :param predictions_dir: Path to the directory containing subdirectories with JSON files.
-    :return: Pandas DataFrame with compiled data.
-    """
-    data = []
-    for compound_name in os.listdir(predictions_dir):
-        compound_id = compound_name.split('_')[-1]
-        compound_dir = os.path.join(predictions_dir, compound_name)
-        results = [compound_dir,  f"boltz_results_{compound_name}", "predictions", f"{compound_name}"]
-        compound_result =  "/".join(results)
-        if not os.path.isdir(compound_result):
-            continue
-
-        affinity_file = os.path.join(compound_result, f"affinity_{compound_name}.json")
-        confidence_file = os.path.join(compound_result, f"confidence_{compound_name}_model_0.json")
-
-        if os.path.exists(affinity_file) and os.path.exists(confidence_file):
-            with open(affinity_file, 'r') as af:
-                affinity_data = json.load(af)
-                affinity_pred_value = affinity_data.get("affinity_pred_value", None)
-                ic50_nm = (10 ** affinity_pred_value) * 1000 
-                pred_pic50 = -math.log10((10 ** affinity_pred_value) * 1e-6)
-                affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
-
-            with open(confidence_file, 'r') as cf:
-                confidence_data = json.load(cf)
-                confidence_score = confidence_data.get("confidence_score", None)
-                ptm = confidence_data.get("ptm", None)
-                iptm = confidence_data.get("iptm", None)
-                ligand_iptm = confidence_data.get("ligand_iptm", None)
-                protein_iptm = confidence_data.get("protein_iptm", None)
-                complex_plddt = confidence_data.get("complex_plddt", None)
-                complex_iplddt = confidence_data.get("complex_iplddt", None)
-                complex_pde = confidence_data.get("complex_pde", None)
-                complex_ipde = confidence_data.get("complex_ipde", None)
-
-            energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
-
-            data.append({
-                "compound_id": compound_id,
-                "Pred log10(IC50)": affinity_pred_value,
-                "Pred pIC50": pred_pic50,
-                "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,
-                "Binding Probability": affinity_probability_binary,
-                "Pred Label":  True if affinity_probability_binary > 0.5 else False,
-                "Confidence Score": confidence_score,
-                "kcal/mol": energy_value,
-                "PTM": ptm,
-                "IPTM": iptm,
-                "Ligand IPTM": ligand_iptm,
-                "Protein IPTM": protein_iptm,
-                "Complex pLDDT": complex_plddt,
-                "Complex iPLDDT": complex_iplddt,
-                "Complex PDE": complex_pde,
-                "Complex iPDE": complex_ipde
-            })
-            
-    if reps:
-        all_reps = [os.path.join(predictions_dir, f) for f in os.listdir(predictions_dir)] # only replicate dirs should be in here
-        data = []
-        for rep in all_reps:
-            compounds_in_reps = [d for d in os.listdir(rep) if os.path.isdir(os.path.join(rep, d))]
-            rep_name = rep.split('/')[-1]
-            for compound_name in compounds_in_reps:
-                compound_dir = os.path.join(predictions_dir, rep_name, compound_name)
-                results = [compound_dir, f"boltz_results_{compound_name}", "predictions", f"{compound_name}"]
-                compound_result =  "/".join(results)
-        
-                if not os.path.isdir(compound_result):
-                    continue
-
-                affinity_file = os.path.join(compound_result, f"affinity_{compound_name}.json")
-                confidence_file = os.path.join(compound_result, f"confidence_{compound_name}_model_0.json")
-
-                if os.path.exists(affinity_file) and os.path.exists(confidence_file):
-                    with open(affinity_file, 'r') as af:
-                        affinity_data = json.load(af)
-                        affinity_pred_value = affinity_data.get("affinity_pred_value", None)
-                        ic50_nm = (10 ** affinity_pred_value) * 1000
-                        pred_pic50 = -math.log10((10 ** affinity_pred_value) * 1e-6)
-                        affinity_probability_binary = affinity_data.get("affinity_probability_binary", None)
-
-                    with open(confidence_file, 'r') as cf:
-                        confidence_data = json.load(cf)
-                        confidence_score = confidence_data.get("confidence_score", None)
-                        ptm = confidence_data.get("ptm", None)
-                        iptm = confidence_data.get("iptm", None)
-                        ligand_iptm = confidence_data.get("ligand_iptm", None)
-                        protein_iptm = confidence_data.get("protein_iptm", None)
-                        complex_plddt = confidence_data.get("complex_plddt", None)
-                        complex_iplddt = confidence_data.get("complex_iplddt", None)
-                        complex_pde = confidence_data.get("complex_pde", None)
-                        complex_ipde = confidence_data.get("complex_ipde", None)
-
-                    # energy_value = convert_IC_to_energy(affinity_pred_value) if affinity_pred_value is not None else None
-                    compound_id = compound_name.split('_')[-1]
-
-                    data.append({
-                        "rep_id": rep_name,
-                        "compound_id": compound_id,
-                        "Pred log10(IC50)": affinity_pred_value,
-                        "Pred pIC50": pred_pic50,
-                        "Pred Label (IC50-like)": True if ic50_nm < 1000 else False,
-                        "Binding Probability": affinity_probability_binary,
-                        "Pred Label":  True if affinity_probability_binary > 0.5 else False,
-                        "Confidence Score": confidence_score,
-                        "kcal/mol": None,
-                        "PTM": ptm,
-                        "IPTM": iptm,
-                        "Ligand IPTM": ligand_iptm,
-                        "Protein IPTM": protein_iptm,
-                        "Complex pLDDT": complex_plddt,
-                        "Complex iPLDDT": complex_iplddt,
-                        "Complex PDE": complex_pde,
-                        "Complex iPDE": complex_ipde})
-    return pd.DataFrame(data)
-
 def process_invitro(invitro_df, exp_col, threshold=1000):
     '''
-    Cleans up in-vitro csv data, converts affinity values from nM to uM, and returns DataFrames with labeled actives and inactives.
-    :param invitro_df: Pandas DataFrame
-        Experimental in vitro affinity measured for a set of ligands. 
-    :param exp_col (str): Name of the column with in vitro affinity or IC50 values. 
-    :threshold (int): Threshold in nM to label actives vs inactives. Default = 1000nM 
-    :return: Pandas DataFrame
-        Active and inactive ligands labelled based on the threshold.
+    Process in-vitro data: convert log IC50 (µM) to nM and label actives/inactives.
+    
+    :param invitro_df: DataFrame with experimental data
+    :param exp_col: Column name with log10(IC50 in µM) values
+    :param threshold: Threshold in nM to label actives (default: 1000 nM = 1 µM)
+    :return: DataFrame with added columns: {exp_col}_nM, pIC50, is_binder
     '''
     num_nans = invitro_df[exp_col].isna().sum()
-    print(f"Number of NaN values in '{exp_col}': {num_nans}")
+    if num_nans > 0:
+        print(f"Warning: {num_nans} NaN values in '{exp_col}'")
     
-    invitro_df["is_binder"] = invitro_df[exp_col].apply(lambda x: True if x < int(threshold) else False)
-
-    invitro_df[f"log{exp_col}"] = invitro_df[exp_col].apply(lambda x: math.log10(round(x/1000, 3))) # nM -> uM and log10(uM)
-    invitro_df["pIC50"] = invitro_df[exp_col].apply(lambda x: -math.log10(x * 1e-9)) # nM -> -log10(M)
-    invitro_df.drop(exp_col, axis=1, inplace=True)
-    # remove nans 
+    # Convert log10(IC50 in µM) to IC50 in nM
+    exp_col_nM = '_'.join(['exp', exp_col.split('_')[1], 'ic50 (nM)'])
+    invitro_df[exp_col_nM] = invitro_df[exp_col].apply(lambda x: (10 ** x) * 1000)
+    
+    # Convert log10(IC50 in µM) to pIC50 (M scale)
+    invitro_df["pIC50"] = 6 - invitro_df[exp_col]
+    
+    # Label actives: IC50 < threshold (in nM)
+    invitro_df["is_binder"] = invitro_df[exp_col_nM] < threshold
     invitro_df.replace(["nan", "NaN"], np.nan, inplace=True) 
-
-    return pd.DataFrame(invitro_df.dropna())
+    invitro_df = invitro_df.drop(columns=exp_col_nM)
+    
+    return invitro_df
 
 def enrichment_factor(df_truth_pred, score_col, topN):
     '''
@@ -175,7 +50,7 @@ def enrichment_factor(df_truth_pred, score_col, topN):
 
     :return: List of Enrichment Factors for all Boltz prediction replicates given. 
     '''
-    if score_col == 'Pred log10(IC50)':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True) # best on top. most negative ic50 on top
     else: 
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
@@ -251,6 +126,10 @@ def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
     ax.plot(x, y_pred, color='grey', linestyle=":", label=f"Linear fit (R² = {r_squared:.2f})")
     ax.set_xlabel(x_label)
     ax.set_ylabel(y_label)
+    ax.set_xlim(-2, 2)
+
+    ax.set_xticks(np.arange(-2, 2.1, 1))
+    ax.set_yticks(np.arange(-2, 3.1, 1))
 
     # Titles
     plt.suptitle(f"Experimental vs \n{score_col} Correlation", fontsize=12, fontweight='bold', y=1.00)
@@ -267,7 +146,7 @@ def affinity_scatter(df_truth_pred, score_col, exp_col, run_name=None):
 
 def bedroc_calc(df_truth_pred, score_col, alpha=20):
     
-    if score_col == 'Pred log10(IC50)':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True)
     else:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False).reset_index(drop=True)
@@ -302,7 +181,7 @@ def calculate_logAUC(df_truth_pred, score_col, LOGAUC_MIN=0.001):
     RANDOM_LOGAUC = 0.5  # This is correct for log space
     
     # Sort by scores
-    if score_col == 'Pred log10(IC50)':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True)
     else:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=False)
@@ -371,7 +250,7 @@ def calculate_metrics(df_truth_pred, score_col, topN):
     '''
     Computes performance metrics and curve data for a given score column.
     '''
-    if score_col == 'Pred log10(IC50)':
+    if 'log' in score_col:
         df_sorted = df_truth_pred.sort_values(by=score_col, ascending=True).reset_index(drop=True)
         y_scores = -df_sorted[score_col].values 
     else:
@@ -468,7 +347,7 @@ def plot_curves(curves={}, metrics={}, run_name=None):
             df_sorted = curves['logauc'].copy()
             score_col = metrics['Score Used']
             
-            if score_col == 'Pred log10(IC50)':
+            if 'log' in score_col:
                 df_sorted = df_sorted.sort_values(by=score_col, ascending=True)
             else:
                 df_sorted = df_sorted.sort_values(by=score_col, ascending=False)

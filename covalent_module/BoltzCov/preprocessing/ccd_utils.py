@@ -57,7 +57,6 @@ def extract_entities(pdb_file, protein=True):
         Path to the output PDB file containing the extracted entity.
         PDB file in the same directory as the input, with suffix '_prot.pdb' or '_lig.pdb' based on the extracted entity.
     '''
-    VERBOSE = os.getenv("VERBOSE", "FALSE").upper() == "TRUE"
 
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("complex", pdb_file)
@@ -70,12 +69,10 @@ def extract_entities(pdb_file, protein=True):
 
         output = os.path.join(os.path.dirname(pdb_file), f"{output_base}_prot.pdb")
         io.save(output, ProteinSelect())
-        if VERBOSE: print(f"[SUCCESS] Protein written to {output}")
 
     else: # ligand
         output = os.path.join(os.path.dirname(pdb_file), f"{output_base}_lig.pdb")
         io.save(output, LigandSelect())
-        if VERBOSE: print(f"[SUCCESS] Ligand written to {output}")
 
     return output 
 
@@ -216,7 +213,6 @@ def convert_pdbIDX_boltzIDX(pdb_file, records_csv):
     :return mapped_idx: int
         Residue index based on Boltz mapping protocol.
     '''
-    VERBOSE = os.getenv("VERBOSE", "FALSE").upper() == "TRUE"
     pdb_id = Path(pdb_file).stem
     res_info = pdb_to_map(pdb_file, records_csv)
     res_idx, _, res_name = res_idx_chain(pdb_id, records_csv)
@@ -225,8 +221,6 @@ def convert_pdbIDX_boltzIDX(pdb_file, records_csv):
 
     if len(mapped_idx) == 1:
         return mapped_idx[0][-1]
-    else: 
-        if VERBOSE: print(f'[WARNING] More than one matching residue found for {pdb_file}')
 
 def get_link_atoms(parent_file, records_csv):
     '''
@@ -282,7 +276,6 @@ def get_link_atoms(parent_file, records_csv):
                         lig_atom = line[13:17].strip()
                         lig_idx = line[23:27].strip() # ?not needed?
                         return prot_atom, res_name, res_idx, chain_name, ccd, lig_atom, lig_idx
-    if VERBOSE: print(f"[WARNING] LINK record not present or no valid ligand found in PDB, {parent_file}")
     return None
 
 ##################################################################################
@@ -290,10 +283,11 @@ def get_link_atoms(parent_file, records_csv):
 ##################################################################################
 
 WARHEAD_REACTIONS = { "nitrile": "[C:3][C:4]#[N:5]>>[C:3][13C:4]=[N:5]", 
-"alkylhalide" : "[CX4;CH,CH2:2][I,Br,Cl:3]>>[13C:2]",
-"vinyl-sulfone" : "[C:3]=[C:4][S:5](=O)=O>>[13C:3][C:4][S:5](=O)=O", # for CYS rxn; might be diff for HIS (Schneider, Grabowsky 2015)
-"acrylamide" : "[C:2]=[C:3]-C(=O)-[N:4]>>[13C:3]-[C:2]-C(=O)-[N:4]",
-"nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]"
+"nitrile2": "[N:4]#[C:5]>>[N:4]=[13C:5]",
+"psuedo_bond": "[C:5]=[O:1]>>[C:5]=[13O:1]",
+# "alkylhalide" : "[CX4;CH,CH2:2][I,Br,Cl:3]>>[13C:2]",
+# "vinyl-sulfone" : "[C:3]=[C:4][S:5](=O)=O>>[13C:3][C:4][S:5](=O)=O", # for CYS rxn; might be diff for HIS (Schneider, Grabowsky 2015)
+# "acrylamide" : "[C:2]=[C:3]-C(=O)-[N:4]>>[13C:3]-[C:2]-C(=O)-[N:4]",
 }
 WARHEAD_REACTANTS = {name: smarts.split(">>")[0] for name, smarts in WARHEAD_REACTIONS.items()}
 compiled_reactants = {name: Chem.MolFromSmarts(smarts) for name, smarts in WARHEAD_REACTANTS.items()}
@@ -363,7 +357,6 @@ def process_covalent_smiles(ccd_db, smiles, compound_id):
     :return: str
         Unique CCD code (or the vault_id) for the covalent ligand pkl file.
     '''
-    VERBOSE = os.getenv("VERBOSE", "FALSE").upper() == "TRUE"
 
     mol_sdf = Chem.MolFromSmiles(smiles) 
 
@@ -381,8 +374,6 @@ def process_covalent_smiles(ccd_db, smiles, compound_id):
     if not os.path.exists("{ccd_db}/{compound_id}.pkl"):
         with open(f"{ccd_db}/{compound_id}.pkl", "wb") as f:
             pickle.dump(mol_sdf, f)
-    else:
-        if VERBOSE: print(f"[WARNING] pkl for {compound_id} exists. Will not remake.")
 
 def identify_warhead(smiles):
     '''
@@ -394,7 +385,6 @@ def identify_warhead(smiles):
     :returns: list
         A list of warhead names found in the molecule.
     '''
-    VERBOSE = os.getenv("VERBOSE", "FALSE").upper() == "TRUE"
     mol = Chem.MolFromSmiles(smiles)
     if not mol:
         print("[ERROR] Invalid SMILES string.")
@@ -406,9 +396,9 @@ def identify_warhead(smiles):
             found_warheads.append(name)
 
     if len(found_warheads) > 1:
-        if VERBOSE: print("[WARNING] More than 1 warhead found. Choosing first match.")
+        print("[WARNING] More than 1 warhead found. Choosing first match.")
     elif len(found_warheads) == 0:
-        raise ValueError(f'[ERROR] No matching warhead was found for {smiles}')
+        return None 
     return found_warheads[0]
 
 def ligand_cov_atom(no_lg_smiles):
@@ -431,6 +421,8 @@ def ligand_cov_atom(no_lg_smiles):
     for atom in mol.GetAtoms():
         if atom.GetSymbol() == 'C' and atom.GetIsotope() == 13:
             return f'C{atom.GetIdx()}'
+        elif atom.GetSymbol() == 'O' and atom.GetIsotope() == 13:
+            return f'O{atom.GetIdx()}'
     return -1
 
 def remove_leaving_group(smiles):
@@ -449,11 +441,12 @@ def remove_leaving_group(smiles):
             wh_type: str
                 Identified warhead type. 
     '''
-    VERBOSE = os.getenv("VERBOSE", "FALSE").upper() == "TRUE"
 
     mol = Chem.MolFromSmiles(smiles)
     wh_type = identify_warhead(smiles)
-
+    if wh_type is None: 
+        return None, None, None
+    
     rxn = AllChem.ReactionFromSmarts(WARHEAD_REACTIONS[wh_type])
 
     products = rxn.RunReactants((mol,))
@@ -465,7 +458,7 @@ def remove_leaving_group(smiles):
     lig_atom = ligand_cov_atom(smi_no_lg)
     smi_no_c13 = smi_no_lg.replace("13", "")
 
-    if VERBOSE: print('[SUCCESS] Leaving group removed:', smi_no_c13)
+    print('[SUCCESS] Leaving group removed:', smi_no_c13)
 
     return smi_no_c13, lig_atom, wh_type
     
